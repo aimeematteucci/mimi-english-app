@@ -6,6 +6,7 @@ const ACCENT = '#c17c4a'
 const SIDEBAR_BG = '#e8e1d8'
 const PAGE_BG = '#f2ece4'
 const CARD_BG = '#ffffff'
+const LIGHT = '#f8f5f2'
 const TEXT = '#1a1a1a'
 const MUTED = '#7a6a5a'
 const OLIVE = '#8d9a55'
@@ -13,9 +14,10 @@ const XP_PER_LEVEL = 200
 
 export default function StudentDashboard() {
   const { profile, signOut } = useAuth()
-  const [lessons, setLessons] = useState([])
   const [studentLessons, setStudentLessons] = useState([])
+  const [classNotes, setClassNotes] = useState([])
   const [assignments, setAssignments] = useState([])
+  const [vocabulary, setVocabulary] = useState([])
   const [feedback, setFeedback] = useState([])
   const [activities, setActivities] = useState([])
   const [badges, setBadges] = useState([])
@@ -55,25 +57,23 @@ export default function StudentDashboard() {
     const { data: ce } = await supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', sid)
     setClasses(ce || [])
 
-    const classIds = (ce || []).map(c => c.classes?.id).filter(Boolean)
-
-    const [{ data: ls }, { data: sl }, { data: sa }, { data: fb }, { data: act }, { data: bdg }] = await Promise.all([
-      classIds.length
-        ? supabase.from('lessons').select('*').in('class_id', classIds).order('created_at')
-        : Promise.resolve({ data: [] }),
-      supabase.from('student_lessons').select('*').eq('student_id', sid),
+    const [{ data: sl }, { data: sa }, { data: sv }, { data: fb }, { data: act }, { data: bdg }] = await Promise.all([
+      supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', sid),
+      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid),
       supabase.from('feedback').select('*').eq('student_id', sid)
-        .not('type', 'in', '("preference","class_note","student_activity")')
+        .not('type', 'in', '("preference","student_activity")')
         .order('created_at', { ascending: false }),
       supabase.from('student_activities').select('*').eq('student_id', sid).order('position'),
       supabase.from('student_badges').select('*').eq('student_id', sid),
     ])
 
-    setLessons(ls || [])
     setStudentLessons(sl || [])
     setAssignments(sa || [])
-    setFeedback(fb || [])
+    setVocabulary(sv || [])
+    const allFb = fb || []
+    setFeedback(allFb.filter(f => f.type !== 'class_note'))
+    setClassNotes(allFb.filter(f => f.type === 'class_note'))
     setActivities(act || [])
     setBadges(bdg || [])
 
@@ -93,20 +93,12 @@ export default function StudentDashboard() {
     updateStreak()
   }, [profile, fetchData, updateStreak])
 
-  async function toggleLesson(lessonId) {
-    const existing = studentLessons.find(sl => sl.lesson_id === lessonId)
-    if (existing) {
-      const newStatus = existing.status === 'completed' ? 'pending' : 'completed'
-      await supabase.from('student_lessons').update({
-        status: newStatus,
-        completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
-      }).eq('id', existing.id)
-    } else {
-      await supabase.from('student_lessons').insert({
-        student_id: profile.id, lesson_id: lessonId,
-        status: 'completed', completed_at: new Date().toISOString(),
-      })
-    }
+  async function toggleLesson(sl) {
+    const newStatus = sl.status === 'completed' ? 'pending' : 'completed'
+    await supabase.from('student_lessons').update({
+      status: newStatus,
+      completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+    }).eq('id', sl.id)
     fetchData()
   }
 
@@ -232,31 +224,42 @@ export default function StudentDashboard() {
         <section style={{ marginBottom: 28 }}>
           <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Lessons</h2>
           <Card>
-            {lessons.length === 0 ? (
+            {classNotes.length > 0 && (
+              <div style={{ marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {classNotes.slice(0, 3).map(n => (
+                  <div key={n.id} style={{ background: LIGHT, borderRadius: 12, padding: '12px 14px', borderLeft: `3px solid ${ACCENT}` }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: MUTED, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Note · {new Date(n.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                    </p>
+                    <p style={{ fontSize: 13, color: TEXT, margin: 0 }}>{n.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {studentLessons.length === 0 ? (
               <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No lessons assigned yet.</p>
             ) : (
               <>
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
-                    <span style={{ fontSize: 13, color: MUTED }}>{completedLessonsCount} of {lessons.length} completed</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: OLIVE }}>{Math.round((completedLessonsCount / lessons.length) * 100)}%</span>
+                    <span style={{ fontSize: 13, color: MUTED }}>{completedLessonsCount} of {studentLessons.length} completed</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: OLIVE }}>{Math.round((completedLessonsCount / studentLessons.length) * 100)}%</span>
                   </div>
                   <div style={{ height: 8, background: '#e8e1d8', borderRadius: 99 }}>
                     <div style={{
                       height: '100%', borderRadius: 99, background: OLIVE, transition: 'width 0.4s ease',
-                      width: `${(completedLessonsCount / lessons.length) * 100}%`,
+                      width: `${(completedLessonsCount / studentLessons.length) * 100}%`,
                     }} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {lessons.map(lesson => {
-                    const sl = studentLessons.find(s => s.lesson_id === lesson.id)
-                    const done = sl?.status === 'completed'
+                  {studentLessons.map(sl => {
+                    const done = sl.status === 'completed'
                     return (
-                      <div key={lesson.id} onClick={() => toggleLesson(lesson.id)} style={{
+                      <div key={sl.id} onClick={() => toggleLesson(sl)} style={{
                         display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
                         borderRadius: 12, cursor: 'pointer', transition: 'background 0.15s',
-                        background: done ? 'rgba(141,154,85,0.09)' : '#f8f5f2',
+                        background: done ? 'rgba(141,154,85,0.09)' : LIGHT,
                         border: `1.5px solid ${done ? 'rgba(141,154,85,0.2)' : 'transparent'}`,
                       }}>
                         <div style={{
@@ -271,8 +274,8 @@ export default function StudentDashboard() {
                           <p style={{
                             fontWeight: 600, fontSize: 14, margin: 0,
                             color: done ? MUTED : TEXT, textDecoration: done ? 'line-through' : 'none',
-                          }}>{lesson.title}</p>
-                          {lesson.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{lesson.description}</p>}
+                          }}>{sl.lessons?.title}</p>
+                          {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{sl.lessons.description}</p>}
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 700, color: done ? OLIVE : MUTED, flexShrink: 0 }}>
                           {done ? '✓ +50 XP' : '50 XP'}
@@ -282,6 +285,34 @@ export default function StudentDashboard() {
                   })}
                 </div>
               </>
+            )}
+          </Card>
+        </section>
+
+        {/* Assignments */}
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Assignments</h2>
+          <Card>
+            {assignments.length === 0 ? (
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No assignments yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {assignments.map(sa => <AssignmentItem key={sa.id} sa={sa} onUpdate={fetchData} />)}
+              </div>
+            )}
+          </Card>
+        </section>
+
+        {/* Vocabulary */}
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Vocabulary</h2>
+          <Card>
+            {vocabulary.length === 0 ? (
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No vocabulary assigned yet.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {vocabulary.map(sv => <VocabItem key={sv.id} sv={sv} onUpdate={fetchData} />)}
+              </div>
             )}
           </Card>
         </section>
@@ -334,6 +365,71 @@ function Card({ children }) {
   )
 }
 
+/* ── Assignment item ── */
+function AssignmentItem({ sa, onUpdate }) {
+  const [response, setResponse] = useState(sa.student_response || '')
+  const [saving, setSaving] = useState(false)
+  const done = sa.status === 'completed'
+
+  async function submit() {
+    setSaving(true)
+    await supabase.from('student_assignments').update({
+      student_response: response,
+      status: 'completed',
+    }).eq('id', sa.id)
+    setSaving(false)
+    onUpdate()
+  }
+
+  return (
+    <div style={{
+      background: LIGHT, borderRadius: 12, padding: '14px 16px',
+      border: `1.5px solid ${done ? 'rgba(141,154,85,0.25)' : 'transparent'}`,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+        <div>
+          <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{sa.assignments?.title}</p>
+          {sa.assignments?.description && <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{sa.assignments.description}</p>}
+          {sa.assignments?.due_date && <p style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>Due: {new Date(sa.assignments.due_date).toLocaleDateString()}</p>}
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: done ? OLIVE : ACCENT, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {done ? '✓ Completed' : 'Pending'}
+        </span>
+      </div>
+      <textarea value={response} onChange={e => setResponse(e.target.value)} rows={2}
+        placeholder="Write your answer…"
+        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', resize: 'none', color: TEXT, boxSizing: 'border-box', background: 'white' }} />
+      <button onClick={submit} disabled={saving} style={{
+        marginTop: 8, padding: '7px 16px', borderRadius: 8, border: 'none',
+        background: ACCENT, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      }}>{saving ? 'Saving…' : done ? 'Update response' : 'Submit'}</button>
+    </div>
+  )
+}
+
+/* ── Vocabulary item ── */
+function VocabItem({ sv, onUpdate }) {
+  const mastered = sv.status === 'mastered'
+
+  async function toggle() {
+    await supabase.from('student_vocabulary').update({ status: mastered ? 'learning' : 'mastered' }).eq('id', sv.id)
+    onUpdate()
+  }
+
+  return (
+    <div style={{ background: LIGHT, borderRadius: 12, padding: '12px 14px' }}>
+      <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{sv.vocabulary?.word}</p>
+      <p style={{ fontSize: 13, color: MUTED, margin: '3px 0 0' }}>{sv.vocabulary?.definition}</p>
+      {sv.vocabulary?.example && <p style={{ fontSize: 12, color: MUTED, fontStyle: 'italic', margin: '3px 0 0' }}>"{sv.vocabulary.example}"</p>}
+      <button onClick={toggle} style={{
+        marginTop: 8, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+        background: mastered ? 'rgba(141,154,85,0.15)' : 'rgba(193,124,74,0.12)',
+        color: mastered ? OLIVE : ACCENT, fontSize: 11, fontWeight: 700,
+      }}>{mastered ? '✓ Mastered' : 'Mark as mastered'}</button>
+    </div>
+  )
+}
+
 /* ── Feedback ── */
 function FeedbackSection({ feedback }) {
   return (
@@ -342,7 +438,7 @@ function FeedbackSection({ feedback }) {
       {feedback.length === 0
         ? <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>
         : feedback.slice(0, 3).map(f => (
-          <div key={f.id} style={{ background: '#f8f5f2', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+          <div key={f.id} style={{ background: LIGHT, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
             <p style={{ fontSize: 14, color: TEXT, lineHeight: 1.6, margin: 0 }}>{f.content}</p>
             <p style={{ fontSize: 11, color: MUTED, margin: '6px 0 0' }}>
               {new Date(f.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
@@ -393,7 +489,7 @@ function PreferencesSection({ profile, onSent }) {
           </div>
           <textarea value={note} onChange={e => setNote(e.target.value)}
             placeholder="Anything specific you'd like? (optional)" rows={2}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', background: '#f8f5f2', resize: 'none', boxSizing: 'border-box', color: TEXT }} />
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', background: LIGHT, resize: 'none', boxSizing: 'border-box', color: TEXT }} />
           <button onClick={send} style={{
             width: '100%', marginTop: 10, padding: '12px', borderRadius: 12, border: 'none',
             background: ACCENT, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',

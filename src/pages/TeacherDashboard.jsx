@@ -4,9 +4,9 @@ import { supabase } from '../lib/supabase'
 
 const OLIVE = '#8d9a55'
 const ACCENT = '#c17c4a'
-const TEXT = '#43492a'
-const MUTED = '#6b7340'
-const CREAM = '#eef0e0'
+const TEXT = '#1a1a1a'
+const MUTED = '#7a6a5a'
+const CREAM = '#f2ece4'
 const DANGER = '#d94f4f'
 
 export default function TeacherDashboard() {
@@ -15,7 +15,7 @@ export default function TeacherDashboard() {
   const [classes, setClasses] = useState([])
   const [selected, setSelected] = useState(null)
   const [activeStudents, setActiveStudents] = useState(new Set())
-  const [tab, setTab] = useState('students') // students | classes | lessons
+  const [tab, setTab] = useState('students') // students | classes
 
   const fetchAll = useCallback(async () => {
     const [{ data: st }, { data: cl }, { data: subs }, { data: prefs }] = await Promise.all([
@@ -57,23 +57,23 @@ export default function TeacherDashboard() {
   return (
     <div style={{ minHeight: '100vh', background: CREAM, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* Header */}
-      <div style={{ background: TEXT, padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
         <div>
-          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 700, color: '#c2ca86', margin: 0 }}>
+          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 800, color: TEXT, margin: 0 }}>
             Hi, {firstName}
           </h1>
-          <p style={{ fontSize: 13, color: 'rgba(194,202,134,0.6)', margin: '3px 0 0' }}>{today}</p>
+          <p style={{ fontSize: 13, color: MUTED, margin: '3px 0 0' }}>{today}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <Pill>{students.length} students</Pill>
           <Pill>{classes.length} classes</Pill>
-          <button onClick={signOut} style={{ background: 'none', border: '1.5px solid rgba(194,202,134,0.3)', borderRadius: 20, padding: '7px 16px', fontSize: 13, color: 'rgba(194,202,134,0.7)', cursor: 'pointer' }}>Sign out</button>
+          <button onClick={signOut} style={{ background: 'none', border: '1.5px solid rgba(0,0,0,0.12)', borderRadius: 20, padding: '7px 16px', fontSize: 13, color: MUTED, cursor: 'pointer' }}>Sign out</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: '20px 32px 0', borderBottom: '1px solid rgba(67,73,42,0.1)' }}>
-        {['students', 'classes', 'lessons'].map(t => (
+      <div style={{ display: 'flex', gap: 4, padding: '20px 32px 0' }}>
+        {['students', 'classes'].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '9px 20px', borderRadius: '10px 10px 0 0', border: 'none', cursor: 'pointer',
             fontSize: 13, fontWeight: 600, textTransform: 'capitalize',
@@ -97,10 +97,6 @@ export default function TeacherDashboard() {
         {tab === 'classes' && (
           <ClassesTab classes={classes} teacherId={profile.id} students={students} onRefresh={fetchAll} />
         )}
-
-        {tab === 'lessons' && (
-          <LessonsTab classes={classes} />
-        )}
       </div>
 
       {selected && (
@@ -111,7 +107,7 @@ export default function TeacherDashboard() {
 }
 
 function Pill({ children }) {
-  return <div style={{ background: 'rgba(194,202,134,0.15)', borderRadius: 20, padding: '7px 14px', fontSize: 13, color: '#c2ca86', fontWeight: 500 }}>{children}</div>
+  return <div style={{ background: 'rgba(193,124,74,0.12)', borderRadius: 20, padding: '7px 14px', fontSize: 13, color: ACCENT, fontWeight: 600 }}>{children}</div>
 }
 
 function StudentCard({ s, hasNew, onClick }) {
@@ -125,7 +121,7 @@ function StudentCard({ s, hasNew, onClick }) {
       {hasNew && (
         <div style={{ position: 'absolute', top: 12, right: 12, width: 10, height: 10, borderRadius: '50%', background: DANGER }} />
       )}
-      <div style={{ width: 42, height: 42, borderRadius: '50%', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: TEXT, marginBottom: 10 }}>
+      <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#d4c4b5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#5c4a3a', marginBottom: 10 }}>
         {(s.full_name || s.email)?.[0]?.toUpperCase()}
       </div>
       <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{s.full_name || s.email}</p>
@@ -230,12 +226,12 @@ function ClassesTab({ classes, teacherId, students, onRefresh }) {
               </div>
 
               {isExpanded && (
-                <div style={{ marginTop: 16, borderTop: '1px solid rgba(67,73,42,0.1)', paddingTop: 14 }}>
+                <div style={{ marginTop: 16, borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 14 }}>
                   <p style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 10px' }}>Students</p>
                   {students.map(s => {
                     const enrolled = enrolledIds.has(s.id)
                     return (
-                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(67,73,42,0.06)' }}>
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 30, height: 30, borderRadius: '50%', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: TEXT }}>
                             {(s.full_name || s.email)?.[0]?.toUpperCase()}
@@ -259,106 +255,15 @@ function ClassesTab({ classes, teacherId, students, onRefresh }) {
   )
 }
 
-/* ── Lessons tab ── */
-function LessonsTab({ classes }) {
-  const [selectedClass, setSelectedClass] = useState('')
-  const [lessons, setLessons] = useState([])
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '' })
-  const [editId, setEditId] = useState(null)
-
-  const fetchLessons = useCallback(async () => {
-    const { data } = await supabase.from('lessons').select('*').eq('class_id', selectedClass).order('created_at')
-    setLessons(data || [])
-  }, [selectedClass])
-
-  useEffect(() => {
-    if (selectedClass) fetchLessons()
-  }, [selectedClass, fetchLessons])
-
-  async function save() {
-    if (!form.title.trim() || !selectedClass) return
-    if (editId) {
-      await supabase.from('lessons').update(form).eq('id', editId)
-    } else {
-      await supabase.from('lessons').insert({ ...form, class_id: selectedClass })
-    }
-    setForm({ title: '', description: '' })
-    setEditId(null)
-    setShowForm(false)
-    fetchLessons()
-  }
-
-  async function remove(id) {
-    if (!confirm('Delete this lesson?')) return
-    await supabase.from('lessons').delete().eq('id', id)
-    fetchLessons()
-  }
-
-  function startEdit(l) {
-    setForm({ title: l.title, description: l.description || '' })
-    setEditId(l.id)
-    setShowForm(true)
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, fontWeight: 700, color: TEXT, margin: 0 }}>Lessons</h2>
-        {selectedClass && <button onClick={() => { setShowForm(true); setEditId(null); setForm({ title: '', description: '' }) }} style={addBtn}>+ New lesson</button>}
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
-          style={{ padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 14, color: TEXT, background: 'white', cursor: 'pointer' }}>
-          <option value="">Select a class…</option>
-          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-
-      {showForm && (
-        <div style={{ background: 'white', borderRadius: 16, padding: '20px 24px', marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,0.07)' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: TEXT, margin: '0 0 14px' }}>{editId ? 'Edit lesson' : 'New lesson'}</h3>
-          <Field label="Title" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Past tense verbs" />
-          <Field label="Description (optional)" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="What will students practice?" />
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button onClick={save} style={addBtn}>Save</button>
-            <button onClick={() => setShowForm(false)} style={cancelBtn}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {selectedClass && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {lessons.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No lessons yet for this class.</p>}
-          {lessons.map((l, i) => (
-            <div key={l.id} style={{ background: 'white', borderRadius: 14, padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: MUTED, flexShrink: 0 }}>{i + 1}</div>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{l.title}</p>
-                  {l.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{l.description}</p>}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button onClick={() => startEdit(l)} style={smallBtn}>Edit</button>
-                <button onClick={() => remove(l.id)} style={{ ...smallBtn, color: DANGER }}>Delete</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /* ── Student detail modal ── */
 function StudentModal({ student, classes, onClose, onRefresh }) {
   const [tab, setTab] = useState('feedback')
   const [feedback, setFeedback] = useState([])
+  const [lessons, setLessons] = useState([])
   const [assignments, setAssignments] = useState([])
   const [enrollments, setEnrollments] = useState([])
   const [preferences, setPreferences] = useState([])
+  const [classNotes, setClassNotes] = useState([])
   const [activities, setActivities] = useState([])
   const [vocabulary, setVocabulary] = useState([])
   const [joinLink, setJoinLink] = useState(student.join_link || '')
@@ -373,6 +278,10 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
   const [noteClass, setNoteClass] = useState('')
   const [noteText, setNoteText] = useState('')
   const [noteSent, setNoteSent] = useState(false)
+
+  // lesson form
+  const [lessonForm, setLessonForm] = useState({ title: '', description: '', class_id: '' })
+  const [showLessonForm, setShowLessonForm] = useState(false)
 
   // assignment form
   const [assignForm, setAssignForm] = useState({ title: '', description: '', due_date: '', class_id: '' })
@@ -402,16 +311,19 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
 
   const fetchStudentData = useCallback(async () => {
     const sid = student.id
-    const [{ data: fb }, { data: sa }, { data: ce }, { data: act }, { data: sv }] = await Promise.all([
+    const [{ data: fb }, { data: sl }, { data: sa }, { data: ce }, { data: act }, { data: sv }] = await Promise.all([
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
+      supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', sid),
       supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', sid),
       supabase.from('student_activities').select('*').eq('student_id', sid).order('position'),
-      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid).order('created_at'),
+      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid),
     ])
     const allFb = fb || []
     setFeedback(allFb.filter(f => f.type !== 'preference' && f.type !== 'class_note' && f.type !== 'student_activity'))
     setPreferences(allFb.filter(f => f.type === 'preference' || f.content?.startsWith('Preferred materials:')))
+    setClassNotes(allFb.filter(f => f.type === 'class_note'))
+    setLessons(sl || [])
     setAssignments(sa || [])
     setEnrollments(ce || [])
     setActivities(act || [])
@@ -443,6 +355,23 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
     await supabase.from('feedback').insert({ student_id: student.id, content: noteText, type: 'class_note', class_id: noteClass })
     setNoteText(''); setNoteSent(true)
     setTimeout(() => setNoteSent(false), 2000)
+    fetchStudentData()
+  }
+
+  async function createLesson() {
+    if (!lessonForm.title.trim() || !lessonForm.class_id) return
+    const { data: l } = await supabase.from('lessons').insert({
+      title: lessonForm.title, description: lessonForm.description, class_id: lessonForm.class_id,
+    }).select().single()
+    if (l) await supabase.from('student_lessons').insert({ student_id: student.id, lesson_id: l.id, status: 'pending' })
+    setLessonForm({ title: '', description: '', class_id: '' })
+    setShowLessonForm(false)
+    fetchStudentData()
+  }
+
+  async function removeLesson(studentLessonId, lessonId) {
+    await supabase.from('student_lessons').delete().eq('id', studentLessonId)
+    await supabase.from('lessons').delete().eq('id', lessonId)
     fetchStudentData()
   }
 
@@ -501,13 +430,24 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
     fetchStudentData()
   }
 
-  const TABS = ['feedback', 'class note', 'assignments', 'vocabulary', 'activities', 'join link', 'preferences', 'classes']
+  async function deleteClassNote(id) {
+    await supabase.from('feedback').delete().eq('id', id)
+    fetchStudentData()
+  }
+
+  async function deleteAssignment(studentAssignmentId, assignmentId) {
+    await supabase.from('student_assignments').delete().eq('id', studentAssignmentId)
+    await supabase.from('assignments').delete().eq('id', assignmentId)
+    fetchStudentData()
+  }
+
+  const TABS = ['feedback', 'lessons', 'class note', 'assignments', 'vocabulary', 'activities', 'join link', 'preferences', 'classes']
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 620, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Modal header */}
-        <div style={{ padding: '20px 24px 0', borderBottom: '1px solid rgba(67,73,42,0.1)' }}>
+        <div style={{ padding: '20px 24px 0', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
               <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, margin: 0 }}>{student.full_name || student.email}</h2>
@@ -535,7 +475,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
             <div>
               <div style={{ marginBottom: 16 }}>
                 <textarea value={newFeedback} onChange={e => setNewFeedback(e.target.value)} rows={3} placeholder="Write feedback for this student…"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.15)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
                 <button onClick={addFeedback} style={{ ...addBtn, marginTop: 8 }}>Add feedback</button>
               </div>
               {feedback.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>}
@@ -548,18 +488,74 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
             </div>
           )}
 
+          {/* Lessons */}
+          {tab === 'lessons' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Lessons assigned here appear in this student's Lessons section.</p>
+              <button onClick={() => setShowLessonForm(x => !x)} style={{ ...addBtn, marginBottom: 14 }}>+ New lesson</button>
+              {showLessonForm && (
+                <div style={{ background: CREAM, borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5 }}>Class</label>
+                    <select value={lessonForm.class_id} onChange={e => setLessonForm(f => ({ ...f, class_id: e.target.value }))}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 13, color: TEXT, background: 'white', boxSizing: 'border-box' }}>
+                      <option value="">Select class…</option>
+                      {enrollments.map(ce => <option key={ce.id} value={ce.classes?.id}>{ce.classes?.name}</option>)}
+                    </select>
+                  </div>
+                  <Field label="Title" value={lessonForm.title} onChange={v => setLessonForm(f => ({ ...f, title: v }))} placeholder="e.g. Past tense verbs" />
+                  <Field label="Description (optional)" value={lessonForm.description} onChange={v => setLessonForm(f => ({ ...f, description: v }))} placeholder="What will the student practice?" />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={createLesson} style={addBtn}>Save</button>
+                    <button onClick={() => setShowLessonForm(false)} style={cancelBtn}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {lessons.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No lessons assigned yet.</p>}
+              {lessons.map(sl => (
+                <div key={sl.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{sl.lessons?.title}</p>
+                    {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{sl.lessons.description}</p>}
+                    <p style={{ fontSize: 12, margin: '6px 0 0', fontWeight: 600, color: sl.status === 'completed' ? OLIVE : ACCENT }}>
+                      {sl.status === 'completed' ? '✓ Completed' : 'Pending'}
+                    </p>
+                  </div>
+                  <button onClick={() => removeLesson(sl.id, sl.lesson_id)} style={{ ...smallBtn, color: DANGER, flexShrink: 0 }}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Class note */}
           {tab === 'class note' && (
             <div>
               <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>This note will appear in the student's Lessons section.</p>
               <select value={noteClass} onChange={e => setNoteClass(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 14, color: TEXT, marginBottom: 10 }}>
+                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 14, color: TEXT, marginBottom: 10 }}>
                 <option value="">Select class…</option>
                 {enrollments.map(ce => <option key={ce.id} value={ce.classes?.id}>{ce.classes?.name}</option>)}
               </select>
               <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="Write a note for this session…"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box', marginBottom: 10 }} />
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.15)', resize: 'none', color: TEXT, boxSizing: 'border-box', marginBottom: 10 }} />
               <button onClick={sendClassNote} style={addBtn}>{noteSent ? 'Sent! ✓' : 'Send note'}</button>
+
+              {classNotes.length > 0 && (
+                <div style={{ marginTop: 20, borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 16 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 10px' }}>Sent notes</p>
+                  {classNotes.map(n => (
+                    <div key={n.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 6px' }}>
+                          {enrollments.find(e => e.class_id === n.class_id)?.classes?.name || classes.find(c => c.id === n.class_id)?.name || 'Class'} · {new Date(n.created_at).toLocaleDateString()}
+                        </p>
+                        <button onClick={() => deleteClassNote(n.id)} style={{ ...smallBtn, color: DANGER, flexShrink: 0 }}>Delete</button>
+                      </div>
+                      <p style={{ fontSize: 14, color: TEXT, margin: 0 }}>{n.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -598,10 +594,13 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
                           </div>
                         )}
                       </div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
-                        <input type="checkbox" checked={seen} onChange={() => { markIdSeen(sa.id); onItemSeen() }} />
-                        <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap' }}>Evaluated</span>
-                      </label>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={seen} onChange={() => { markIdSeen(sa.id); onItemSeen() }} />
+                          <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap' }}>Evaluated</span>
+                        </label>
+                        <button onClick={() => deleteAssignment(sa.id, sa.assignment_id)} style={{ ...smallBtn, color: DANGER }}>Delete</button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -612,7 +611,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
           {/* Vocabulary */}
           {tab === 'vocabulary' && (
             <div>
-              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Words assigned here appear in the student's Vocabulary Match activity.</p>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Words assigned here appear in the student's Vocabulary section.</p>
               <button onClick={() => setShowVocabForm(x => !x)} style={{ ...addBtn, marginBottom: 14 }}>+ Add word</button>
               {showVocabForm && (
                 <div style={{ background: CREAM, borderRadius: 12, padding: '16px', marginBottom: 16 }}>
@@ -690,7 +689,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
                         </label>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: note ? 10 : 0 }}>
-                        {materials.map(m => <span key={m} style={{ padding: '5px 12px', borderRadius: 20, background: TEXT, color: '#c2ca86', fontSize: 12, fontWeight: 600 }}>{m}</span>)}
+                        {materials.map(m => <span key={m} style={{ padding: '5px 12px', borderRadius: 20, background: TEXT, color: '#eef0e0', fontSize: 12, fontWeight: 600 }}>{m}</span>)}
                       </div>
                       {note && <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.5, fontStyle: 'italic', margin: 0 }}>"{note}"</p>}
                     </div>
@@ -718,6 +717,21 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
                   </div>
                 )
               })}
+
+              {enrollments.filter(e => !classes.find(c => c.id === e.class_id)).length > 0 && (
+                <>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '20px 0 10px' }}>Other enrollments</p>
+                  {enrollments.filter(e => !classes.find(c => c.id === e.class_id)).map(e => (
+                    <div key={e.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{e.classes?.name || 'Unknown class'}</p>
+                        {e.classes?.schedule && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{e.classes.schedule}</p>}
+                      </div>
+                      <button onClick={() => unenroll(e.id)} style={{ ...smallBtn, color: DANGER }}>Remove</button>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -749,7 +763,7 @@ function ActivitySlot({ slot, existing, onSave }) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…"
-          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 13, color: TEXT, background: 'white' }} />
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 13, color: TEXT, background: 'white' }} />
         <button onClick={save} disabled={saving} style={addBtn}>
           {saved ? '✓ Saved' : saving ? '…' : 'Save'}
         </button>
@@ -766,7 +780,7 @@ function FeedbackItem({ f, editingId, editText, onEdit, onEditChange, onSaveEdit
       {isEditing ? (
         <>
           <textarea value={editText} onChange={e => onEditChange(e.target.value)} rows={3}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.15)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button onClick={onSaveEdit} style={addBtn}>Save</button>
             <button onClick={onCancelEdit} style={cancelBtn}>Cancel</button>
@@ -794,11 +808,11 @@ function Field({ label, value, onChange, placeholder, type = 'text' }) {
     <div style={{ marginBottom: 12 }}>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5 }}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 13, color: TEXT, background: 'white', boxSizing: 'border-box' }} />
+        style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 13, color: TEXT, background: 'white', boxSizing: 'border-box' }} />
     </div>
   )
 }
 
-const addBtn = { padding: '9px 18px', borderRadius: 10, border: 'none', background: TEXT, color: '#c2ca86', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
-const cancelBtn = { padding: '9px 18px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', background: 'transparent', color: MUTED, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
-const smallBtn = { padding: '5px 12px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.15)', background: 'transparent', color: MUTED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }
+const addBtn = { padding: '9px 18px', borderRadius: 10, border: 'none', background: ACCENT, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+const cancelBtn = { padding: '9px 18px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', background: 'transparent', color: MUTED, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+const smallBtn = { padding: '5px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.12)', background: 'transparent', color: MUTED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }
