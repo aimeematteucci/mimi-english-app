@@ -280,7 +280,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
   const [noteSent, setNoteSent] = useState(false)
 
   // lesson form
-  const [lessonForm, setLessonForm] = useState({ title: '', description: '', class_id: '' })
+  const [lessonForm, setLessonForm] = useState({ title: '', description: '', url: '', class_id: '' })
   const [showLessonForm, setShowLessonForm] = useState(false)
 
   // assignment form
@@ -361,10 +361,10 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
   async function createLesson() {
     if (!lessonForm.title.trim() || !lessonForm.class_id) return
     const { data: l } = await supabase.from('lessons').insert({
-      title: lessonForm.title, description: lessonForm.description, class_id: lessonForm.class_id,
+      title: lessonForm.title, description: lessonForm.description, url: lessonForm.url.trim() || null, class_id: lessonForm.class_id,
     }).select().single()
     if (l) await supabase.from('student_lessons').insert({ student_id: student.id, lesson_id: l.id, status: 'pending' })
-    setLessonForm({ title: '', description: '', class_id: '' })
+    setLessonForm({ title: '', description: '', url: '', class_id: '' })
     setShowLessonForm(false)
     fetchStudentData()
   }
@@ -505,6 +505,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
                   </div>
                   <Field label="Title" value={lessonForm.title} onChange={v => setLessonForm(f => ({ ...f, title: v }))} placeholder="e.g. Past tense verbs" />
                   <Field label="Description (optional)" value={lessonForm.description} onChange={v => setLessonForm(f => ({ ...f, description: v }))} placeholder="What will the student practice?" />
+                  <Field label="Link (optional)" value={lessonForm.url} onChange={v => setLessonForm(f => ({ ...f, url: v }))} placeholder="https://…" />
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                     <button onClick={createLesson} style={addBtn}>Save</button>
                     <button onClick={() => setShowLessonForm(false)} style={cancelBtn}>Cancel</button>
@@ -517,6 +518,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
                   <div>
                     <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{sl.lessons?.title}</p>
                     {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{sl.lessons.description}</p>}
+                    {sl.lessons?.url && <a href={sl.lessons.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: ACCENT, margin: '3px 0 0', display: 'block' }}>🔗 {sl.lessons.url}</a>}
                     <p style={{ fontSize: 12, margin: '6px 0 0', fontWeight: 600, color: sl.status === 'completed' ? OLIVE : ACCENT }}>
                       {sl.status === 'completed' ? '✓ Completed' : 'Pending'}
                     </p>

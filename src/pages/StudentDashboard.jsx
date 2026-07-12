@@ -276,6 +276,12 @@ export default function StudentDashboard() {
                             color: done ? MUTED : TEXT, textDecoration: done ? 'line-through' : 'none',
                           }}>{sl.lessons?.title}</p>
                           {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{sl.lessons.description}</p>}
+                          {sl.lessons?.url && (
+                            <a href={sl.lessons.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 12, color: ACCENT, fontWeight: 600, margin: '4px 0 0', display: 'inline-block' }}>
+                              Open lesson ↗
+                            </a>
+                          )}
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 700, color: done ? OLIVE : MUTED, flexShrink: 0 }}>
                           {done ? '✓ +50 XP' : '50 XP'}
