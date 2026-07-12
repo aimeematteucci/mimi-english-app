@@ -1,382 +1,362 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
+const ACCENT = '#c17c4a'
+const SIDEBAR_BG = '#e8e1d8'
+const PAGE_BG = '#f2ece4'
+const CARD_BG = '#ffffff'
+const TEXT = '#1a1a1a'
+const MUTED = '#7a6a5a'
+const OLIVE = '#8d9a55'
+const XP_PER_LEVEL = 200
+
 export default function StudentDashboard() {
   const { profile, signOut } = useAuth()
+  const [lessons, setLessons] = useState([])
+  const [studentLessons, setStudentLessons] = useState([])
   const [assignments, setAssignments] = useState([])
-  const [vocabulary, setVocabulary] = useState([])
   const [feedback, setFeedback] = useState([])
+  const [activities, setActivities] = useState([])
+  const [badges, setBadges] = useState([])
   const [classes, setClasses] = useState([])
+  const [streak, setStreak] = useState(0)
 
   useEffect(() => {
     if (!profile) return
     fetchData()
+    updateStreak()
   }, [profile])
 
-  async function fetchData() {
-    const studentId = profile.id
-    const [{ data: sa }, { data: sv }, { data: fb }, { data: ce }] = await Promise.all([
-      supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', studentId),
-      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', studentId),
-      supabase.from('feedback').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
-      supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', studentId),
-    ])
-    setAssignments(sa || [])
-    setVocabulary(sv || [])
-    setFeedback(fb || [])
-    setClasses(ce || [])
+  async function updateStreak() {
+    const today = new Date().toISOString().split('T')[0]
+    const lastActive = profile.last_active_date
+    let newStreak = profile.streak || 0
+
+    if (!lastActive) {
+      newStreak = 1
+    } else if (lastActive === today) {
+      setStreak(profile.streak || 0)
+      return
+    } else {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yStr = yesterday.toISOString().split('T')[0]
+      newStreak = lastActive === yStr ? (profile.streak || 0) + 1 : 1
+    }
+
+    setStreak(newStreak)
+    await supabase.from('profiles').update({ streak: newStreak, last_active_date: today }).eq('id', profile.id)
+
+    if (newStreak >= 7) {
+      await supabase.from('student_badges').upsert(
+        { student_id: profile.id, badge_type: '7_day_streak' },
+        { onConflict: 'student_id,badge_type' }
+      )
+    }
   }
 
+  async function fetchData() {
+    const sid = profile.id
+    const { data: ce } = await supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', sid)
+    setClasses(ce || [])
+
+    const classIds = (ce || []).map(c => c.classes?.id).filter(Boolean)
+
+    const [{ data: ls }, { data: sl }, { data: sa }, { data: fb }, { data: act }, { data: bdg }] = await Promise.all([
+      classIds.length
+        ? supabase.from('lessons').select('*').in('class_id', classIds).order('created_at')
+        : Promise.resolve({ data: [] }),
+      supabase.from('student_lessons').select('*').eq('student_id', sid),
+      supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', sid),
+      supabase.from('feedback').select('*').eq('student_id', sid)
+        .not('type', 'in', '("preference","class_note","student_activity")')
+        .order('created_at', { ascending: false }),
+      supabase.from('student_activities').select('*').eq('student_id', sid).order('position'),
+      supabase.from('student_badges').select('*').eq('student_id', sid),
+    ])
+
+    setLessons(ls || [])
+    setStudentLessons(sl || [])
+    setAssignments(sa || [])
+    setFeedback(fb || [])
+    setActivities(act || [])
+    setBadges(bdg || [])
+
+    // auto-award perfect homework badge
+    const allDone = (sa || []).length > 0 && (sa || []).every(a => a.status === 'completed')
+    if (allDone) {
+      await supabase.from('student_badges').upsert(
+        { student_id: profile.id, badge_type: 'perfect_homework' },
+        { onConflict: 'student_id,badge_type' }
+      )
+    }
+  }
+
+  async function toggleLesson(lessonId) {
+    const existing = studentLessons.find(sl => sl.lesson_id === lessonId)
+    if (existing) {
+      const newStatus = existing.status === 'completed' ? 'pending' : 'completed'
+      await supabase.from('student_lessons').update({
+        status: newStatus,
+        completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+      }).eq('id', existing.id)
+    } else {
+      await supabase.from('student_lessons').insert({
+        student_id: profile.id, lesson_id: lessonId,
+        status: 'completed', completed_at: new Date().toISOString(),
+      })
+    }
+    fetchData()
+  }
+
+  const completedLessonsCount = studentLessons.filter(sl => sl.status === 'completed').length
+  const completedAssignmentsCount = assignments.filter(a => a.status === 'completed').length
+  const totalXP = completedLessonsCount * 50 + completedAssignmentsCount * 30
+  const level = Math.floor(totalXP / XP_PER_LEVEL) + 1
+  const xpInLevel = totalXP % XP_PER_LEVEL
+
   const firstName = profile?.full_name?.split(' ')[0] || 'Student'
-  const mastered = vocabulary.filter(v => v.status === 'mastered').length
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night'
+
+  const BADGE_LABELS = {
+    '7_day_streak': '🔥 7-Day Streak',
+    'perfect_homework': '✓ Perfect Homework',
+    'quiz_master': '⭐ Quiz Master',
+    'word_master': '📚 Word Master',
+  }
+
+  const SLOTS = [
+    { key: 'vocabulary_match', name: 'Vocabulary Match', icon: '📋' },
+    { key: 'listening_podcast', name: 'Listening Podcast', icon: '🎧' },
+    { key: 'culture_quiz', name: 'Culture Quiz', icon: '🌎' },
+    { key: 'grammar_sprint', name: 'Grammar Sprint', icon: '⚡' },
+  ]
+  const displayActivities = SLOTS.map(slot => {
+    const assigned = activities.find(a => a.slot_key === slot.key)
+    return { id: slot.key, name: slot.name, icon: slot.icon, url: assigned?.url || null }
+  })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--card-cream)', paddingBottom: 48 }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '28px 32px 24px', flexWrap: 'wrap', gap: 16,
+    <div style={{ display: 'flex', minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
+
+      {/* ── Sidebar ── */}
+      <aside style={{
+        width: 240, flexShrink: 0, background: SIDEBAR_BG,
+        padding: '32px 20px', display: 'flex', flexDirection: 'column', gap: 24,
+        borderRight: '1px solid rgba(0,0,0,0.07)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 52, height: 52, borderRadius: '50%', background: 'var(--text-dark)',
+            width: 64, height: 64, borderRadius: '50%', background: '#d4c4b5',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, color: 'var(--card-green)', fontSize: 20, flexShrink: 0,
-          }}>
-            {firstName[0]?.toUpperCase()}
-          </div>
-          <div>
-            <h1 style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-dark)', margin: 0, lineHeight: 1.1 }}>Hi, {firstName}</h1>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0, marginTop: 3 }}>Here's everything for your week, all in one place.</p>
+            fontSize: 26, fontWeight: 700, color: '#5c4a3a',
+          }}>{firstName[0]?.toUpperCase()}</div>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontWeight: 700, fontSize: 16, color: TEXT, margin: 0 }}>{profile?.full_name}</p>
+            {classes[0]?.classes?.name && (
+              <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{classes[0].classes.name}</p>
+            )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <Pill>{today}</Pill>
-          <Pill>{mastered} of {vocabulary.length} words mastered</Pill>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <XPRing xp={xpInLevel} maxXP={XP_PER_LEVEL} level={level} />
+          <p style={{ fontSize: 11, color: MUTED, margin: 0 }}>{xpInLevel} / {XP_PER_LEVEL} XP · Level {level}</p>
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(255,255,255,0.55)', borderRadius: 12, padding: '10px 14px',
+        }}>
+          <span style={{ fontSize: 22 }}>🔥</span>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{streak}-day streak</p>
+            <p style={{ fontSize: 11, color: MUTED, margin: 0 }}>Keep it up!</p>
+          </div>
+        </div>
+
+        {badges.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Badges</p>
+            {badges.map(b => (
+              <div key={b.id} style={{
+                background: 'rgba(255,255,255,0.6)', borderRadius: 10,
+                padding: '8px 12px', fontSize: 12, fontWeight: 600, color: TEXT,
+              }}>{BADGE_LABELS[b.badge_type] || b.badge_type}</div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 'auto' }}>
           <button onClick={signOut} style={{
-            background: 'none', border: '1.5px solid rgba(67,73,42,0.2)', borderRadius: 20,
-            padding: '7px 16px', fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer',
+            width: '100%', padding: '9px', borderRadius: 10,
+            border: '1.5px solid rgba(0,0,0,0.12)', background: 'transparent',
+            fontSize: 13, color: MUTED, cursor: 'pointer',
           }}>Sign out</button>
         </div>
-      </div>
+      </aside>
 
-      {/* 3-column grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 20,
-        padding: '0 32px',
-        alignItems: 'start',
-      }}>
-        {/* Left: Classes */}
-        <ClassesPanel classes={classes} feedback={feedback} />
+      {/* ── Main ── */}
+      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto', maxWidth: 960 }}>
 
-        {/* Center: Vocabulary */}
-        <VocabularyPanel vocabulary={vocabulary} onRefresh={fetchData} />
-
-        {/* Right: Assignments + What to work with */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <AssignmentsPanel assignments={assignments} profile={profile} onRefresh={fetchData} />
-          <WorkWithPanel profile={profile} />
+        {/* Header card */}
+        <div style={{
+          background: CARD_BG, borderRadius: 20, padding: '24px 28px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: 28, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', gap: 16,
+        }}>
+          <div>
+            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 34, fontWeight: 800, color: TEXT, margin: 0 }}>
+              {greeting}, {firstName}!
+            </h1>
+            {classes[0]?.classes?.schedule && (
+              <p style={{ fontSize: 14, color: MUTED, margin: '6px 0 0' }}>
+                Today's class · {classes[0].classes.schedule}
+              </p>
+            )}
+          </div>
+          {profile?.join_link && (
+            <a href={profile.join_link} target="_blank" rel="noopener noreferrer" style={{
+              display: 'flex', alignItems: 'center', gap: 8, background: ACCENT, color: 'white',
+              borderRadius: 12, padding: '12px 20px', fontSize: 14, fontWeight: 600,
+              textDecoration: 'none', flexShrink: 0,
+            }}>
+              🎥 Join class
+            </a>
+          )}
         </div>
+
+        {/* Lessons */}
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Lessons</h2>
+          <Card>
+            {lessons.length === 0 ? (
+              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No lessons assigned yet.</p>
+            ) : (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                    <span style={{ fontSize: 13, color: MUTED }}>{completedLessonsCount} of {lessons.length} completed</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: OLIVE }}>{Math.round((completedLessonsCount / lessons.length) * 100)}%</span>
+                  </div>
+                  <div style={{ height: 8, background: '#e8e1d8', borderRadius: 99 }}>
+                    <div style={{
+                      height: '100%', borderRadius: 99, background: OLIVE, transition: 'width 0.4s ease',
+                      width: `${(completedLessonsCount / lessons.length) * 100}%`,
+                    }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {lessons.map(lesson => {
+                    const sl = studentLessons.find(s => s.lesson_id === lesson.id)
+                    const done = sl?.status === 'completed'
+                    return (
+                      <div key={lesson.id} onClick={() => toggleLesson(lesson.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                        borderRadius: 12, cursor: 'pointer', transition: 'background 0.15s',
+                        background: done ? 'rgba(141,154,85,0.09)' : '#f8f5f2',
+                        border: `1.5px solid ${done ? 'rgba(141,154,85,0.2)' : 'transparent'}`,
+                      }}>
+                        <div style={{
+                          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                          background: done ? OLIVE : 'white',
+                          border: `2px solid ${done ? OLIVE : 'rgba(0,0,0,0.15)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {done && <span style={{ color: 'white', fontSize: 11, fontWeight: 800 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{
+                            fontWeight: 600, fontSize: 14, margin: 0,
+                            color: done ? MUTED : TEXT, textDecoration: done ? 'line-through' : 'none',
+                          }}>{lesson.title}</p>
+                          {lesson.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{lesson.description}</p>}
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: done ? OLIVE : MUTED, flexShrink: 0 }}>
+                          {done ? '✓ +50 XP' : '50 XP'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </Card>
+        </section>
+
+        {/* Feedback + Preferences */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+          <FeedbackSection feedback={feedback} />
+          <PreferencesSection profile={profile} onSent={fetchData} />
+        </div>
+
+        {/* Extra activities */}
+        <section>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Extra activities</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            {displayActivities.map(act => <ActivityCard key={act.id} act={act} />)}
+          </div>
+        </section>
+      </main>
+    </div>
+  )
+}
+
+/* ── XP Ring ── */
+function XPRing({ xp, maxXP, level }) {
+  const r = 44
+  const circ = 2 * Math.PI * r
+  const offset = circ - (xp / maxXP) * circ
+  return (
+    <div style={{ position: 'relative', width: 110, height: 110 }}>
+      <svg width="110" height="110" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="55" cy="55" r={r} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="8" />
+        <circle cx="55" cy="55" r={r} fill="none" stroke={OLIVE} strokeWidth="8"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 22, fontWeight: 800, color: TEXT, lineHeight: 1 }}>{xp}</span>
+        <span style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>Level {level}</span>
       </div>
     </div>
   )
 }
 
-function Pill({ children }) {
+/* ── Card wrapper ── */
+function Card({ children }) {
   return (
-    <div style={{
-      background: 'white', borderRadius: 20, padding: '8px 16px',
-      fontSize: 13, color: 'var(--text-dark)', fontWeight: 500,
-      boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
-    }}>{children}</div>
-  )
-}
-
-function PanelHeader({ dot, title, subtitle }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: dot || 'var(--text-dark)', flexShrink: 0 }} />
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: 'var(--text-dark)', textTransform: 'uppercase' }}>{title}</span>
-      </div>
-      {subtitle && <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, paddingLeft: 18 }}>{subtitle}</p>}
-    </div>
-  )
-}
-
-function Panel({ children, dark }) {
-  return (
-    <div style={{
-      background: dark ? 'var(--text-dark)' : 'white',
-      borderRadius: 20, padding: '20px 22px',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-    }}>
+    <div style={{ background: CARD_BG, borderRadius: 20, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
       {children}
     </div>
   )
 }
 
-/* ── Classes ── */
-function ClassesPanel({ classes, feedback }) {
+/* ── Feedback ── */
+function FeedbackSection({ feedback }) {
   return (
-    <Panel>
-      <PanelHeader title="Your Classes" subtitle="Jump in, and read this week's note from me." />
-      {classes.length === 0 && <p style={emptyStyle}>Not enrolled in any classes yet.</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {classes.map((ce, i) => {
-          const classNote = feedback.find(f => f.type === 'class_note' && f.class_id === ce.classes?.id)
-          const note = classNote?.content || ce.classes?.description || null
-          return (
-            <div key={ce.id} style={{
-              paddingTop: i === 0 ? 0 : 16, paddingBottom: 16,
-              borderBottom: i < classes.length - 1 ? '1px solid rgba(67,73,42,0.1)' : 'none',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-dark)', margin: 0 }}>{ce.classes?.name}</p>
-                  {ce.classes?.schedule && (
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>{ce.classes.schedule}</p>
-                  )}
-                </div>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%', border: '1.5px solid rgba(67,73,42,0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer',
-                }}>↗</div>
-              </div>
-              {note && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--card-olive)', background: 'rgba(141,154,85,0.1)', borderRadius: 6, padding: '2px 6px', flexShrink: 0, marginTop: 1 }}>NOTE</span>
-                  <p style={{ fontSize: 13, color: 'var(--text-dark)', margin: 0, lineHeight: 1.5 }}>{note}</p>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </Panel>
-  )
-}
-
-/* ── Vocabulary ── */
-function VocabularyPanel({ vocabulary, onRefresh }) {
-  async function updateStatus(id, status) {
-    await supabase.from('student_vocabulary').update({ status }).eq('id', id)
-    onRefresh()
-  }
-
-  const mastered = vocabulary.filter(v => v.status === 'mastered').length
-  const progress = vocabulary.length ? Math.round((mastered / vocabulary.length) * 100) : 0
-
-  return (
-    <Panel>
-      <PanelHeader title="Vocabulary Practice" subtitle="Tap a card to flip it. Mark each word as you go." />
-      {vocabulary.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ height: 5, background: 'rgba(67,73,42,0.1)', borderRadius: 99, marginBottom: 6 }}>
-            <div style={{ height: '100%', width: `${progress}%`, background: 'var(--card-olive)', borderRadius: 99, transition: 'width 0.4s ease' }} />
-          </div>
-        </div>
-      )}
-      {vocabulary.length === 0
-        ? <p style={emptyStyle}>No vocabulary assigned yet.</p>
-        : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {vocabulary.map(sv => <FlipCard key={sv.id} sv={sv} onUpdate={updateStatus} />)}
-          </div>
-        )
-      }
-    </Panel>
-  )
-}
-
-function FlipCard({ sv, onUpdate }) {
-  const [flipped, setFlipped] = useState(false)
-  const isMastered = sv.status === 'mastered'
-
-  return (
-    <div onClick={() => setFlipped(f => !f)} style={{ cursor: 'pointer', perspective: 600 }}>
-      <div style={{
-        position: 'relative', minHeight: 160,
-        transformStyle: 'preserve-3d',
-        transition: 'transform 0.45s ease',
-        transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-      }}>
-        {/* Front */}
-        <div style={{
-          position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
-          background: isMastered ? '#e8edcf' : '#f5f6ee',
-          borderRadius: 14, padding: '16px 14px',
-          display: 'flex', flexDirection: 'column',
-          border: '1.5px solid rgba(67,73,42,0.1)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 10 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-muted)', opacity: 0.5 }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tap to flip</span>
-          </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            <strong style={{ fontSize: 18, color: 'var(--text-dark)', lineHeight: 1.2 }}>{sv.vocabulary?.word}</strong>
-          </div>
-        </div>
-
-        {/* Back */}
-        <div style={{
-          position: 'absolute', inset: 0, backfaceVisibility: 'hidden',
-          transform: 'rotateY(180deg)',
-          background: '#f5f6ee', borderRadius: 14, padding: '14px 14px',
-          display: 'flex', flexDirection: 'column',
-          border: '1.5px solid rgba(67,73,42,0.1)',
-        }} onClick={e => e.stopPropagation()}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-muted)', opacity: 0.5 }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tap to flip</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-dark)', lineHeight: 1.5, marginBottom: 4, fontWeight: 600 }}>{sv.vocabulary?.definition}</p>
-          {sv.vocabulary?.example && (
-            <p style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text-muted)', lineHeight: 1.4, marginBottom: 8 }}>{sv.vocabulary.example}</p>
-          )}
-          <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
-            <button onClick={() => onUpdate(sv.id, 'mastered')} style={{
-              padding: '6px 12px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 700,
-              background: 'var(--text-dark)', color: 'var(--card-green)', cursor: 'pointer',
-            }}>Got it</button>
-            <button onClick={() => onUpdate(sv.id, 'learning')} style={{
-              padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              border: '1.5px solid var(--card-olive)', background: 'transparent', color: 'var(--card-olive)',
-            }}>Practice</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── Assignments ── */
-function AssignmentsPanel({ assignments, profile, onRefresh }) {
-  const pending = assignments.filter(a => a.status !== 'completed')
-  const done = assignments.filter(a => a.status === 'completed')
-
-  return (
-    <Panel>
-      <PanelHeader title="Your Assignments" subtitle="Picked just for you — check them off as you finish." />
-      {pending.length === 0 && done.length === 0 && <p style={emptyStyle}>No assignments yet.</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {pending.map((sa, i) => (
-          <AssignmentRow key={sa.id} sa={sa} profile={profile} onRefresh={onRefresh}
-            last={i === pending.length - 1 && done.length === 0} />
-        ))}
-        {done.map((sa, i) => (
-          <AssignmentRow key={sa.id} sa={sa} profile={profile} onRefresh={onRefresh} done last={i === done.length - 1} />
-        ))}
-      </div>
-    </Panel>
-  )
-}
-
-function AssignmentRow({ sa, profile, onRefresh, done, last }) {
-  const [expanded, setExpanded] = useState(false)
-  const [response, setResponse] = useState(sa.student_response || '')
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [fileName, setFileName] = useState(sa.attachment_name || '')
-  const fileRef = useRef()
-
-  async function markActivity() {
-    await supabase.from('feedback').insert({ student_id: profile.id, content: 'assignment_update', type: 'student_activity' })
-  }
-
-  async function toggle() {
-    const newStatus = sa.status === 'completed' ? 'pending' : 'completed'
-    await supabase.from('student_assignments').update({ status: newStatus }).eq('id', sa.id)
-    if (newStatus === 'completed') await markActivity()
-    onRefresh()
-  }
-
-  async function handleFileUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    const path = `${profile.id}/${sa.id}/${file.name}`
-    const { error } = await supabase.storage.from('assignment-attachments').upload(path, file, { upsert: true })
-    if (!error) {
-      await supabase.from('student_assignments').update({ attachment_url: path, attachment_name: file.name }).eq('id', sa.id)
-      setFileName(file.name)
-      await markActivity()
-    }
-    setUploading(false)
-  }
-
-  async function saveResponse() {
-    setSaving(true)
-    await supabase.from('student_assignments').update({ student_response: response }).eq('id', sa.id)
-    await markActivity()
-    setSaving(false)
-  }
-
-  const dueLabel = sa.assignments?.due_date
-    ? new Date(sa.assignments.due_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    : null
-
-  return (
-    <div style={{ borderBottom: last ? 'none' : '1px solid rgba(67,73,42,0.08)', paddingBottom: last ? 0 : 14, marginBottom: last ? 0 : 14 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <button onClick={toggle} style={{
-          width: 20, height: 20, borderRadius: 6, border: '2px solid rgba(67,73,42,0.25)',
-          background: done ? 'var(--card-olive)' : 'transparent', flexShrink: 0, marginTop: 2,
-          cursor: done ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          {done && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
-        </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-            <p style={{ fontWeight: 700, fontSize: 14, color: done ? 'var(--text-muted)' : 'var(--text-dark)', margin: 0, textDecoration: done ? 'line-through' : 'none' }}>
-              {sa.assignments?.title || '(Untitled)'}
+    <Card>
+      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Feedback from Aimee</h2>
+      {feedback.length === 0
+        ? <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>
+        : feedback.slice(0, 3).map(f => (
+          <div key={f.id} style={{ background: '#f8f5f2', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+            <p style={{ fontSize: 14, color: TEXT, lineHeight: 1.6, margin: 0 }}>{f.content}</p>
+            <p style={{ fontSize: 11, color: MUTED, margin: '6px 0 0' }}>
+              {new Date(f.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
             </p>
-            {dueLabel && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dark)', background: 'rgba(67,73,42,0.08)', borderRadius: 8, padding: '3px 8px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {dueLabel}
-              </span>
-            )}
           </div>
-          {sa.assignments?.description && (
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '3px 0 0', lineHeight: 1.4 }}>{sa.assignments.description}</p>
-          )}
-          {sa.grade && <p style={{ fontSize: 12, color: 'var(--card-olive)', margin: '3px 0 0', fontWeight: 600 }}>Grade: {sa.grade}</p>}
-          {!done && (
-            <button onClick={() => setExpanded(x => !x)} style={{ fontSize: 11, color: 'var(--card-olive)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 0', fontWeight: 600 }}>
-              {expanded ? 'Hide response ↑' : 'Add response ↓'}
-            </button>
-          )}
-          {expanded && !done && (
-            <div style={{ marginTop: 8 }}>
-              <textarea value={response} onChange={e => setResponse(e.target.value)} placeholder="Write your answer here..." rows={2}
-                style={{ width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 12, border: '1.5px solid rgba(67,73,42,0.15)', background: '#f5f6ee', color: 'var(--text-dark)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
-              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
-                <button onClick={() => fileRef.current?.click()} disabled={uploading} style={chipBtn}>
-                  📎 {uploading ? 'Uploading…' : fileName || 'Attach file'}
-                </button>
-                <button onClick={saveResponse} disabled={saving} style={{ ...chipBtn, background: 'var(--text-dark)', color: 'var(--card-green)' }}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button onClick={toggle} style={{ ...chipBtn, background: 'var(--card-olive)', color: 'white' }}>✓ Done</button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+        ))}
+    </Card>
   )
 }
 
-/* ── What should we work with ── */
-const MATERIALS = ['Videos', 'Practice quizzes', 'Flashcards', 'Reading passages', 'Games', 'Audio lessons']
+/* ── Preferences ── */
+const MATERIALS = ['Videos', 'Games', 'Audio lessons', 'Flashcards', 'Reading passages', 'Other']
 
-function WorkWithPanel({ profile }) {
+function PreferencesSection({ profile, onSent }) {
   const [selected, setSelected] = useState([])
   const [note, setNote] = useState('')
   const [sent, setSent] = useState(false)
@@ -389,40 +369,56 @@ function WorkWithPanel({ profile }) {
     if (!selected.length && !note.trim()) return
     const content = `Preferred materials: ${selected.join(', ')}${note.trim() ? `. Notes: ${note.trim()}` : ''}`
     const { error } = await supabase.from('feedback').insert({ student_id: profile.id, content, type: 'preference' })
-    if (!error) setSent(true)
+    if (!error) { setSent(true); onSent() }
   }
 
   return (
-    <Panel dark>
-      <div style={{ marginBottom: 14 }}>
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(194,202,134,0.6)', textTransform: 'uppercase' }}>What should we work with?</span>
-        <p style={{ fontSize: 13, color: 'rgba(194,202,134,0.7)', margin: '4px 0 0' }}>Pick the kinds of materials you enjoy most.</p>
-      </div>
+    <Card>
+      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, marginBottom: 6 }}>What should we work on?</h2>
+      <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Pick the kinds of materials you enjoy most.</p>
       {sent ? (
-        <p style={{ fontSize: 14, color: 'var(--card-green)', fontWeight: 600, textAlign: 'center', padding: '12px 0' }}>Sent to your tutor! ✓</p>
+        <p style={{ fontSize: 14, fontWeight: 600, color: OLIVE, textAlign: 'center', padding: '12px 0' }}>Sent to Aimee! ✓</p>
       ) : (
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
             {MATERIALS.map(m => (
               <button key={m} onClick={() => toggle(m)} style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: selected.includes(m) ? 'var(--card-green)' : 'transparent',
-                color: selected.includes(m) ? 'var(--text-dark)' : 'rgba(194,202,134,0.8)',
-                border: `1.5px solid ${selected.includes(m) ? 'var(--card-green)' : 'rgba(194,202,134,0.25)'}`,
+                padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                transition: 'all 0.15s',
+                background: selected.includes(m) ? ACCENT : 'transparent',
+                color: selected.includes(m) ? 'white' : TEXT,
+                border: `1.5px solid ${selected.includes(m) ? ACCENT : 'rgba(0,0,0,0.15)'}`,
               }}>{m}</button>
             ))}
           </div>
-          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Anything specific you'd like? (optional)" rows={2}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: 'none', background: 'rgba(255,255,255,0.08)', color: 'rgba(194,202,134,0.9)', resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
+          <textarea value={note} onChange={e => setNote(e.target.value)}
+            placeholder="Anything specific you'd like? (optional)" rows={2}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', background: '#f8f5f2', resize: 'none', boxSizing: 'border-box', color: TEXT }} />
           <button onClick={send} style={{
             width: '100%', marginTop: 10, padding: '12px', borderRadius: 12, border: 'none',
-            background: 'var(--card-green)', color: 'var(--text-dark)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-          }}>Send to my tutor</button>
+            background: ACCENT, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          }}>✈ Send to my tutor</button>
         </>
       )}
-    </Panel>
+    </Card>
   )
 }
 
-const emptyStyle = { fontSize: 13, color: 'var(--text-muted)', margin: 0 }
-const chipBtn = { padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'rgba(67,73,42,0.1)', color: 'var(--text-dark)' }
+/* ── Activity card ── */
+function ActivityCard({ act }) {
+  const inner = (
+    <div style={{
+      background: CARD_BG, borderRadius: 16, padding: '22px 16px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+      opacity: act.url ? 1 : 0.55,
+      cursor: act.url ? 'pointer' : 'default',
+    }}>
+      <span style={{ fontSize: 28 }}>{act.icon || '📎'}</span>
+      <p style={{ fontSize: 13, fontWeight: 600, color: OLIVE, margin: 0, textAlign: 'center' }}>{act.name}</p>
+    </div>
+  )
+  return act.url
+    ? <a href={act.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>{inner}</a>
+    : inner
+}

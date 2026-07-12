@@ -1,811 +1,804 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import Modal from '../components/Modal'
-import FormField from '../components/FormField'
+
+const OLIVE = '#8d9a55'
+const ACCENT = '#c17c4a'
+const TEXT = '#43492a'
+const MUTED = '#6b7340'
+const CREAM = '#eef0e0'
+const DANGER = '#d94f4f'
 
 export default function TeacherDashboard() {
   const { profile, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState('students')
   const [students, setStudents] = useState([])
   const [classes, setClasses] = useState([])
-  const [assignments, setAssignments] = useState([])
-  const [vocabulary, setVocabulary] = useState([])
+  const [selected, setSelected] = useState(null)
   const [activeStudents, setActiveStudents] = useState(new Set())
+  const [tab, setTab] = useState('students') // students | classes | lessons
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [{ data: s }, { data: c }, { data: a }, { data: v }, { data: sa }, { data: fb }] = await Promise.all([
+    const [{ data: st }, { data: cl }, { data: subs }, { data: prefs }] = await Promise.all([
       supabase.from('profiles').select('*').eq('role', 'student').order('full_name'),
-      supabase.from('classes').select('*').order('name'),
-      supabase.from('assignments').select('*, classes(name)').order('created_at', { ascending: false }),
-      supabase.from('vocabulary').select('*').order('word'),
-      supabase.from('student_assignments').select('id, student_id').not('student_response', 'is', null),
-      supabase.from('feedback').select('id, student_id').in('type', ['preference', 'student_activity']),
+      supabase.from('classes').select('*').eq('teacher_id', profile.id).order('name'),
+      supabase.from('student_assignments').select('student_id, created_at').not('student_response', 'is', null).is('grade', null),
+      supabase.from('feedback').select('student_id, created_at').eq('type', 'preference'),
     ])
-    setStudents(s || [])
-    setClasses(c || [])
-    setAssignments(a || [])
-    setVocabulary(v || [])
-    recomputeBadges(sa || [], fb || [])
-  }
+    setStudents(st || [])
+    setClasses(cl || [])
 
-  function recomputeBadges(submissions, feedbackItems) {
-    const seen = getSeenIds()
-    const unread = new Set()
-    for (const r of [...submissions, ...feedbackItems]) {
-      if (!seen.has(r.id)) unread.add(r.student_id)
+    const activityMap = {}
+    for (const r of [...(subs || []), ...(prefs || [])]) {
+      const ts = r.created_at
+      if (!activityMap[r.student_id] || ts > activityMap[r.student_id]) activityMap[r.student_id] = ts
     }
+    const unread = new Set(
+      Object.entries(activityMap)
+        .filter(([id, ts]) => {
+          const last = localStorage.getItem(`student_read_${id}`)
+          return !last || ts > last
+        })
+        .map(([id]) => id)
+    )
     setActiveStudents(unread)
   }
 
-  const tabs = ['students', 'classes', 'assignments', 'vocabulary']
+  function openStudent(s) {
+    localStorage.setItem(`student_read_${s.id}`, new Date().toISOString())
+    setActiveStudents(prev => { const n = new Set(prev); n.delete(s.id); return n })
+    setSelected(s)
+  }
+
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const firstName = profile?.full_name?.split(' ')[0] || 'Teacher'
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--card-cream)', paddingBottom: 48 }}>
+    <div style={{ minHeight: '100vh', background: CREAM, fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '28px 32px 20px', flexWrap: 'wrap', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--text-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'var(--card-green)', fontSize: 20, flexShrink: 0 }}>
-            {(profile?.full_name || 'T')[0].toUpperCase()}
-          </div>
-          <div>
-            <h1 style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-dark)', margin: 0, lineHeight: 1.1 }}>
-              Hi, {profile?.full_name?.split(' ')[0] || 'Teacher'}
-            </h1>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '3px 0 0' }}>Here's your classroom, all in one place.</p>
-          </div>
+      <div style={{ background: TEXT, padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 700, color: '#c2ca86', margin: 0 }}>
+            Hi, {firstName}
+          </h1>
+          <p style={{ fontSize: 13, color: 'rgba(194,202,134,0.6)', margin: '3px 0 0' }}>{today}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Pill>{today}</Pill>
-          <Pill>{students.length} students · {assignments.length} assignments</Pill>
-          <button onClick={signOut} style={{ background: 'none', border: '1.5px solid rgba(67,73,42,0.2)', borderRadius: 20, padding: '7px 16px', fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
-            Sign out
-          </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Pill>{students.length} students</Pill>
+          <Pill>{classes.length} classes</Pill>
+          <button onClick={signOut} style={{ background: 'none', border: '1.5px solid rgba(194,202,134,0.3)', borderRadius: 20, padding: '7px 16px', fontSize: 13, color: 'rgba(194,202,134,0.7)', cursor: 'pointer' }}>Sign out</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, padding: '0 32px 24px', overflowX: 'auto' }}>
-        {tabs.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            padding: '9px 22px', borderRadius: 20, border: 'none', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 600,
-            background: activeTab === tab ? 'var(--text-dark)' : 'white',
-            color: activeTab === tab ? 'var(--card-green)' : 'var(--text-muted)',
-            boxShadow: activeTab === tab ? 'none' : '0 1px 4px rgba(0,0,0,0.07)',
-          }}>
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
+      <div style={{ display: 'flex', gap: 4, padding: '20px 32px 0', borderBottom: '1px solid rgba(67,73,42,0.1)' }}>
+        {['students', 'classes', 'lessons'].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding: '9px 20px', borderRadius: '10px 10px 0 0', border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, textTransform: 'capitalize',
+            background: tab === t ? 'white' : 'transparent',
+            color: tab === t ? TEXT : MUTED,
+            boxShadow: tab === t ? '0 -2px 8px rgba(0,0,0,0.05)' : 'none',
+          }}>{t}</button>
         ))}
       </div>
 
-      <div style={{ padding: '0 32px' }}>
-        {activeTab === 'students' && <StudentsTab students={students} classes={classes} activeStudents={activeStudents} onRefresh={fetchAll} />}
-        {activeTab === 'classes' && <ClassesTab classes={classes} students={students} onRefresh={fetchAll} />}
-        {activeTab === 'assignments' && <AssignmentsTab assignments={assignments} classes={classes} students={students} onRefresh={fetchAll} />}
-        {activeTab === 'vocabulary' && <VocabularyTab vocabulary={vocabulary} students={students} onRefresh={fetchAll} />}
+      <div style={{ padding: '28px 32px' }}>
+        {tab === 'students' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+            {students.map(s => (
+              <StudentCard key={s.id} s={s} hasNew={activeStudents.has(s.id)} onClick={() => openStudent(s)} />
+            ))}
+            {students.length === 0 && <p style={{ color: MUTED, fontSize: 14 }}>No students yet.</p>}
+          </div>
+        )}
+
+        {tab === 'classes' && (
+          <ClassesTab classes={classes} teacherId={profile.id} students={students} onRefresh={fetchAll} />
+        )}
+
+        {tab === 'lessons' && (
+          <LessonsTab classes={classes} />
+        )}
       </div>
+
+      {selected && (
+        <StudentModal student={selected} classes={classes} onClose={() => setSelected(null)} onRefresh={fetchAll} />
+      )}
     </div>
   )
 }
 
 function Pill({ children }) {
+  return <div style={{ background: 'rgba(194,202,134,0.15)', borderRadius: 20, padding: '7px 14px', fontSize: 13, color: '#c2ca86', fontWeight: 500 }}>{children}</div>
+}
+
+function StudentCard({ s, hasNew, onClick }) {
   return (
-    <div style={{ background: 'white', borderRadius: 20, padding: '8px 16px', fontSize: 13, color: 'var(--text-dark)', fontWeight: 500, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-      {children}
+    <div onClick={onClick} style={{
+      background: 'white', borderRadius: 16, padding: '18px 20px', cursor: 'pointer',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.07)', position: 'relative',
+      border: hasNew ? `2px solid ${DANGER}` : '2px solid transparent',
+      transition: 'transform 0.15s, box-shadow 0.15s',
+    }}>
+      {hasNew && (
+        <div style={{ position: 'absolute', top: 12, right: 12, width: 10, height: 10, borderRadius: '50%', background: DANGER }} />
+      )}
+      <div style={{ width: 42, height: 42, borderRadius: '50%', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: TEXT, marginBottom: 10 }}>
+        {(s.full_name || s.email)?.[0]?.toUpperCase()}
+      </div>
+      <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{s.full_name || s.email}</p>
+      <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{s.email}</p>
     </div>
   )
 }
 
-function Panel({ children, style }) {
-  return (
-    <div style={{ background: 'white', borderRadius: 20, padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', ...style }}>
-      {children}
-    </div>
-  )
-}
-
-// ── Students Tab ──────────────────────────────────────────────────────────────
-
-function StudentsTab({ students, classes, activeStudents, onRefresh }) {
-  const [selected, setSelected] = useState(null)
-  const [confirmDelete, setConfirmDelete] = useState(null)
-  const [deleting, setDeleting] = useState(false)
-
-  async function deleteStudent() {
-    if (!confirmDelete) return
-    setDeleting(true)
-    await supabase.from('profiles').delete().eq('id', confirmDelete.id)
-    setConfirmDelete(null)
-    setDeleting(false)
-    onRefresh()
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={sectionTitle}>All Students ({students.length})</h2>
-      </div>
-
-      {confirmDelete && (
-        <Modal title="Remove student?" onClose={() => setConfirmDelete(null)}>
-          <p style={{ fontSize: 14, color: 'var(--text-dark)', marginBottom: 8 }}>
-            Are you sure you want to remove <strong>{confirmDelete.full_name}</strong>?
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
-            This will delete their profile and all associated data. This cannot be undone.
-          </p>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setConfirmDelete(null)} style={{ ...addBtn, flex: 1, background: 'rgba(67,73,42,0.1)', color: 'var(--text-dark)' }}>Cancel</button>
-            <button onClick={deleteStudent} disabled={deleting} style={{ ...addBtn, flex: 1, background: 'var(--danger)', color: 'white', opacity: deleting ? 0.6 : 1 }}>
-              {deleting ? 'Removing...' : 'Yes, remove'}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      <div style={gridStyle}>
-        {students.length === 0 && (
-          <Panel><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No students yet. Students appear here after they sign up.</p></Panel>
-        )}
-        {students.map(s => (
-          <StudentCard key={s.id} student={s} hasNew={activeStudents.has(s.id)} onClick={() => setSelected(s)} onDelete={s => setConfirmDelete(s)} />
-        ))}
-      </div>
-
-      {selected && <StudentDetailModal student={selected} classes={classes}
-        onItemSeen={() => {
-          setActiveStudents(prev => { const next = new Set(prev); next.delete(selected.id); return next })
-        }}
-        onClose={() => { setSelected(null); onRefresh() }} />}
-    </div>
-  )
-}
-
-function StudentCard({ student, hasNew, onClick, onDelete }) {
-  return (
-    <Panel>
-      <div onClick={onClick} style={{ cursor: 'pointer' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--card-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'var(--text-dark)', fontSize: 17 }}>
-              {(student.full_name || student.email)?.[0]?.toUpperCase() || '?'}
-            </div>
-            {hasNew && (
-              <div style={{ position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderRadius: '50%', background: 'var(--danger)', border: '2px solid white' }} />
-            )}
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-dark)' }}>{student.full_name || student.email?.split('@')[0]}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{student.email}</div>
-          </div>
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Joined {new Date(student.created_at).toLocaleDateString()}</p>
-        <p style={{ fontSize: 12, color: 'var(--card-olive)', marginTop: 6, fontWeight: 600 }}>View details →</p>
-      </div>
-      <div style={{ borderTop: '1px solid rgba(67,73,42,0.08)', marginTop: 14, paddingTop: 12 }}>
-        <button onClick={e => { e.stopPropagation(); onDelete(student) }} style={{ ...smallBtn, color: 'var(--danger)', width: '100%' }}>
-          Remove student
-        </button>
-      </div>
-    </Panel>
-  )
-}
-
-function StudentDetailModal({ student, classes, onItemSeen, onClose }) {
-  const [feedbackText, setFeedbackText] = useState('')
-  const [selectedClassId, setSelectedClassId] = useState('')
-  const [assignments, setAssignments] = useState([])
-  const [vocabulary, setVocabulary] = useState([])
-  const [studentFeedback, setStudentFeedback] = useState([])
-  const [preferences, setPreferences] = useState([])
-  const [enrollments, setEnrollments] = useState([])
-  const [tab, setTab] = useState('info')
-  const [saving, setSaving] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [editText, setEditText] = useState('')
-
-  useEffect(() => {
-    loadAll()
-  }, [student.id])
-
-  async function loadAll() {
-    const [{ data: sa }, { data: sv }, { data: fb }, { data: ce }] = await Promise.all([
-      supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', student.id),
-      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', student.id),
-      supabase.from('feedback').select('*').eq('student_id', student.id).order('created_at', { ascending: false }),
-      supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', student.id),
-    ])
-    setAssignments(sa || [])
-    setVocabulary(sv || [])
-    splitFeedback(fb || [])
-    setEnrollments(ce || [])
-  }
-
-  function splitFeedback(all) {
-    setStudentFeedback(all.filter(f => f.type !== 'preference' && f.type !== 'class_note'))
-    setPreferences(all.filter(f => f.type === 'preference' || f.content?.startsWith('Preferred materials:')))
-  }
-
-  async function reloadFeedback() {
-    const { data } = await supabase.from('feedback').select('*').eq('student_id', student.id).order('created_at', { ascending: false })
-    splitFeedback(data || [])
-  }
-
-  async function postFeedback(e) {
-    e.preventDefault()
-    if (!feedbackText.trim()) return
-    setSaving(true)
-    const payload = { student_id: student.id, content: feedbackText.trim() }
-    if (selectedClassId) { payload.type = 'class_note'; payload.class_id = selectedClassId }
-    await supabase.from('feedback').insert(payload)
-    setFeedbackText('')
-    setSelectedClassId('')
-    await reloadFeedback()
-    setSaving(false)
-  }
-
-  async function deleteFeedback(id) {
-    await supabase.from('feedback').delete().eq('id', id)
-    await reloadFeedback()
-  }
-
-  async function saveEdit(id) {
-    await supabase.from('feedback').update({ content: editText }).eq('id', id)
-    setEditingId(null)
-    await reloadFeedback()
-  }
-
-  async function updateAssignment(id, updates) {
-    await supabase.from('student_assignments').update(updates).eq('id', id)
-    const { data } = await supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', student.id)
-    setAssignments(data || [])
-  }
-
-  const tabs = ['info', 'feedback', 'class notes', 'preferences', 'assignments', 'vocabulary', 'classes']
-
-  return (
-    <Modal title={student.full_name || student.email} onClose={onClose}>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>{student.email}</p>
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '6px 14px', borderRadius: 20, border: 'none', fontSize: 12, cursor: 'pointer', fontWeight: 600,
-            background: tab === t ? 'var(--text-dark)' : 'rgba(67,73,42,0.08)',
-            color: tab === t ? 'var(--card-green)' : 'var(--text-dark)',
-          }}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-            {t === 'preferences' && preferences.length > 0 && (
-              <span style={{ marginLeft: 5, background: 'var(--card-olive)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 10 }}>{preferences.length}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'info' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <InfoRow label="Joined" value={new Date(student.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
-          <InfoRow label="Classes" value={enrollments.length} />
-          <InfoRow label="Assignments" value={assignments.length} />
-          <InfoRow label="Vocabulary words" value={vocabulary.length} />
-          <InfoRow label="Words mastered" value={vocabulary.filter(v => v.status === 'mastered').length} />
-        </div>
-      )}
-
-      {tab === 'feedback' && (
-        <div>
-          <form onSubmit={postFeedback} style={{ marginBottom: 20 }}>
-            <FormField label="Post new feedback" type="textarea" value={feedbackText} onChange={e => setFeedbackText(e.target.value)} placeholder="Write feedback for this student..." rows={3} />
-            <button type="submit" disabled={saving || !feedbackText.trim()} style={{ ...addBtn, opacity: saving ? 0.6 : 1 }}>
-              {saving ? 'Posting...' : 'Post feedback'}
-            </button>
-          </form>
-          {studentFeedback.length === 0
-            ? <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No feedback yet.</p>
-            : studentFeedback.map(f => (
-              <FeedbackItem key={f.id} f={f}
-                editingId={editingId} editText={editText}
-                onEdit={() => { setEditingId(f.id); setEditText(f.content) }}
-                onEditChange={setEditText}
-                onSaveEdit={() => saveEdit(f.id)}
-                onCancelEdit={() => setEditingId(null)}
-                onDelete={() => deleteFeedback(f.id)} />
-            ))
-          }
-        </div>
-      )}
-
-      {tab === 'class notes' && (
-        <div>
-          <form onSubmit={e => { e.preventDefault(); postFeedback(e) }} style={{ marginBottom: 20 }}>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Select class</label>
-              <select value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 14, color: 'var(--text-dark)', background: 'white' }}>
-                <option value="">Pick a class...</option>
-                {enrollments.map(ce => (
-                  <option key={ce.classes?.id} value={ce.classes?.id}>{ce.classes?.name}</option>
-                ))}
-              </select>
-            </div>
-            <FormField label="Note for student" type="textarea" value={feedbackText} onChange={e => setFeedbackText(e.target.value)} placeholder="This note will appear in the student's Classes section..." rows={3} />
-            <button type="submit" disabled={saving || !feedbackText.trim() || !selectedClassId} style={{ ...addBtn, opacity: (saving || !feedbackText.trim() || !selectedClassId) ? 0.5 : 1 }}>
-              {saving ? 'Posting...' : 'Post class note'}
-            </button>
-          </form>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Class notes appear in the student's "Your Classes" section next to the relevant class.
-          </p>
-        </div>
-      )}
-
-      {tab === 'preferences' && (
-        <div>
-          {preferences.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>No preferences sent yet.</p>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>The student can share preferred learning materials from their dashboard.</p>
-            </div>
-          ) : preferences.map(p => {
-            const parts = p.content.split('. Notes: ')
-            const materials = parts[0].replace('Preferred materials: ', '').split(', ')
-            const note = parts[1] || null
-            const seen = getSeenIds().has(p.id)
-            return (
-              <div key={p.id} style={{ background: 'rgba(67,73,42,0.04)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>
-                    {new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </p>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
-                    <input type="checkbox" checked={seen} onChange={() => { markIdSeen(p.id); onItemSeen() }} />
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Mark seen</span>
-                  </label>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: note ? 10 : 0 }}>
-                  {materials.map(m => (
-                    <span key={m} style={{ padding: '5px 12px', borderRadius: 20, background: 'var(--text-dark)', color: 'var(--card-green)', fontSize: 12, fontWeight: 600 }}>{m}</span>
-                  ))}
-                </div>
-                {note && <p style={{ fontSize: 13, color: 'var(--text-dark)', lineHeight: 1.5, marginTop: 8, fontStyle: 'italic' }}>"{note}"</p>}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {tab === 'assignments' && (
-        <div>
-          {assignments.length === 0
-            ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No assignments.</p>
-            : assignments.map(sa => {
-              const seen = getSeenIds().has(sa.id)
-              return (
-                <div key={sa.id} style={{ background: 'rgba(67,73,42,0.05)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <strong style={{ fontSize: 14, color: 'var(--text-dark)' }}>{sa.assignments?.title || '(Untitled)'}</strong>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
-                      <input type="checkbox" checked={seen} onChange={() => { markIdSeen(sa.id); onItemSeen() }} />
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Evaluated</span>
-                    </label>
-                  </div>
-                  {sa.assignments?.due_date && (
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Due: {new Date(sa.assignments.due_date).toLocaleDateString()}</p>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, background: sa.status === 'completed' ? 'var(--card-olive)' : 'rgba(67,73,42,0.1)', color: sa.status === 'completed' ? 'white' : 'var(--text-dark)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
-                      {sa.status || 'pending'}
-                    </span>
-                    <input placeholder="Grade" defaultValue={sa.grade || ''} onBlur={e => updateAssignment(sa.id, { grade: e.target.value })}
-                      style={{ width: 80, padding: '4px 8px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 12, color: 'var(--text-dark)', background: 'white' }} />
-                    <input placeholder="Feedback note" defaultValue={sa.feedback || ''} onBlur={e => updateAssignment(sa.id, { feedback: e.target.value })}
-                      style={{ flex: 1, minWidth: 80, padding: '4px 8px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 12, color: 'var(--text-dark)', background: 'white' }} />
-                  </div>
-                  {sa.student_response && (
-                    <div style={{ marginTop: 10, background: 'rgba(67,73,42,0.06)', borderRadius: 8, padding: '8px 10px' }}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Student response:</p>
-                      <p style={{ fontSize: 13, color: 'var(--text-dark)', lineHeight: 1.5 }}>{sa.student_response}</p>
-                    </div>
-                  )}
-                  {sa.attachment_name && sa.attachment_url && <AttachmentLink path={sa.attachment_url} name={sa.attachment_name} />}
-                </div>
-              )
-            })
-          }
-        </div>
-      )}
-
-      {tab === 'vocabulary' && (
-        <div>
-          {vocabulary.length === 0
-            ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No vocabulary assigned.</p>
-            : vocabulary.map(sv => (
-              <div key={sv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(67,73,42,0.08)' }}>
-                <div>
-                  <strong style={{ fontSize: 14, color: 'var(--text-dark)' }}>{sv.vocabulary?.word}</strong>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{sv.vocabulary?.definition}</p>
-                </div>
-                <span style={{ fontSize: 12, background: sv.status === 'mastered' ? 'var(--card-olive)' : 'rgba(67,73,42,0.08)', color: sv.status === 'mastered' ? 'white' : 'var(--text-muted)', padding: '3px 10px', borderRadius: 20, fontWeight: 600, flexShrink: 0, marginLeft: 10 }}>
-                  {sv.status || 'new'}
-                </span>
-              </div>
-            ))
-          }
-        </div>
-      )}
-
-      {tab === 'classes' && (
-        <div>
-          {enrollments.length === 0
-            ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Not enrolled in any classes.</p>
-            : enrollments.map(ce => (
-              <div key={ce.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(67,73,42,0.08)' }}>
-                <strong style={{ color: 'var(--text-dark)' }}>{ce.classes?.name}</strong>
-                {ce.classes?.schedule && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{ce.classes.schedule}</p>}
-              </div>
-            ))
-          }
-        </div>
-      )}
-    </Modal>
-  )
-}
-
-function InfoRow({ label, value }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(67,73,42,0.08)' }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-dark)' }}>{value}</span>
-    </div>
-  )
-}
-
-function FeedbackItem({ f, editingId, editText, onEdit, onEditChange, onSaveEdit, onCancelEdit, onDelete }) {
-  const isEditing = editingId === f.id
-  return (
-    <div style={{ background: 'rgba(67,73,42,0.05)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
-      {isEditing ? (
-        <>
-          <textarea value={editText} onChange={e => onEditChange(e.target.value)} rows={3}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', background: 'white', color: 'var(--text-dark)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={onSaveEdit} style={{ ...addBtn, fontSize: 12, padding: '6px 14px' }}>Save</button>
-            <button onClick={onCancelEdit} style={{ ...smallBtn }}>Cancel</button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text-dark)' }}>{f.content}</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(f.created_at).toLocaleDateString()}</p>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={onEdit} style={{ ...smallBtn, fontSize: 11 }}>Edit</button>
-              <button onClick={onDelete} style={{ ...smallBtn, fontSize: 11, color: 'var(--danger)' }}>Delete</button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function AttachmentLink({ path, name }) {
-  async function open() {
-    const { data, error } = await supabase.storage.from('assignment-attachments').createSignedUrl(path, 3600)
-    if (error) { alert('Could not load file: ' + error.message); return }
-    window.open(data.signedUrl, '_blank')
-  }
-  return (
-    <button onClick={open} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 12, color: 'var(--card-olive)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}>
-      📎 {name}
-    </button>
-  )
-}
-
-// ── Classes Tab ───────────────────────────────────────────────────────────────
-
-function ClassesTab({ classes, students, onRefresh }) {
-  const [showModal, setShowModal] = useState(false)
-  const [editClass, setEditClass] = useState(null)
+/* ── Classes tab ── */
+function ClassesTab({ classes, teacherId, students, onRefresh }) {
+  const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', schedule: '', description: '' })
+  const [editId, setEditId] = useState(null)
+  const [enrollments, setEnrollments] = useState([]) // all enrollments
+  const [expandedClass, setExpandedClass] = useState(null)
 
-  function openNew() { setForm({ name: '', schedule: '', description: '' }); setEditClass(null); setShowModal(true) }
-  function openEdit(c) { setForm({ name: c.name, schedule: c.schedule || '', description: c.description || '' }); setEditClass(c); setShowModal(true) }
+  useEffect(() => { fetchEnrollments() }, [])
 
-  async function save(e) {
-    e.preventDefault()
-    if (editClass) await supabase.from('classes').update(form).eq('id', editClass.id)
-    else await supabase.from('classes').insert(form)
-    setShowModal(false)
+  async function fetchEnrollments() {
+    const { data } = await supabase.from('class_enrollments').select('*')
+    setEnrollments(data || [])
+  }
+
+  async function save() {
+    if (!form.name.trim()) return
+    if (editId) {
+      await supabase.from('classes').update(form).eq('id', editId)
+    } else {
+      await supabase.from('classes').insert({ ...form, teacher_id: teacherId })
+    }
+    setForm({ name: '', schedule: '', description: '' })
+    setEditId(null)
+    setShowForm(false)
     onRefresh()
   }
 
-  async function deleteClass(id) {
+  async function remove(id) {
     if (!confirm('Delete this class?')) return
     await supabase.from('classes').delete().eq('id', id)
     onRefresh()
   }
 
+  function startEdit(c) {
+    setForm({ name: c.name, schedule: c.schedule || '', description: c.description || '' })
+    setEditId(c.id)
+    setShowForm(true)
+  }
+
+  async function enroll(classId, studentId) {
+    await supabase.from('class_enrollments').upsert({ class_id: classId, student_id: studentId }, { onConflict: 'student_id,class_id' })
+    fetchEnrollments()
+  }
+
+  async function unenroll(classId, studentId) {
+    await supabase.from('class_enrollments').delete().eq('class_id', classId).eq('student_id', studentId)
+    fetchEnrollments()
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={sectionTitle}>Classes ({classes.length})</h2>
-        <button onClick={openNew} style={addBtn}>+ New class</button>
+        <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, fontWeight: 700, color: TEXT, margin: 0 }}>Classes</h2>
+        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ name: '', schedule: '', description: '' }) }} style={addBtn}>+ New class</button>
       </div>
 
-      {showModal && (
-        <Modal title={editClass ? 'Edit Class' : 'New Class'} onClose={() => setShowModal(false)}>
-          <form onSubmit={save}>
-            <FormField label="Class name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required placeholder="e.g. Conversation B1" />
-            <FormField label="Schedule" value={form.schedule} onChange={e => setForm({ ...form, schedule: e.target.value })} placeholder="e.g. Tuesdays 18:00" />
-            <FormField label="Description" type="textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="About this class..." />
-            <EnrollmentManager classId={editClass?.id} students={students} />
-            <button type="submit" style={{ ...addBtn, width: '100%', marginTop: 8 }}>
-              {editClass ? 'Save changes' : 'Create class'}
-            </button>
-          </form>
-        </Modal>
+      {showForm && (
+        <div style={{ background: 'white', borderRadius: 16, padding: '20px 24px', marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,0.07)' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: TEXT, margin: '0 0 14px' }}>{editId ? 'Edit class' : 'New class'}</h3>
+          <Field label="Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="e.g. Tuesday Evening" />
+          <Field label="Schedule" value={form.schedule} onChange={v => setForm(f => ({ ...f, schedule: v }))} placeholder="e.g. Tuesdays 8–9pm" />
+          <Field label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Notes about this class" />
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button onClick={save} style={addBtn}>Save</button>
+            <button onClick={() => setShowForm(false)} style={cancelBtn}>Cancel</button>
+          </div>
+        </div>
       )}
 
-      <div style={gridStyle}>
-        {classes.length === 0 && <Panel><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No classes yet.</p></Panel>}
-        {classes.map(c => (
-          <Panel key={c.id}>
-            <strong style={{ fontSize: 17, color: 'var(--text-dark)' }}>{c.name}</strong>
-            {c.schedule && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{c.schedule}</p>}
-            {c.description && <p style={{ fontSize: 13, color: 'var(--text-dark)', marginTop: 8, lineHeight: 1.5 }}>{c.description}</p>}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={() => openEdit(c)} style={smallBtn}>Edit</button>
-              <button onClick={() => deleteClass(c.id)} style={{ ...smallBtn, color: 'var(--danger)' }}>Delete</button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {classes.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No classes yet.</p>}
+        {classes.map(c => {
+          const classEnrollments = enrollments.filter(e => e.class_id === c.id)
+          const enrolledIds = new Set(classEnrollments.map(e => e.student_id))
+          const isExpanded = expandedClass === c.id
+
+          return (
+            <div key={c.id} style={{ background: 'white', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.07)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 15, color: TEXT, margin: 0 }}>{c.name}</p>
+                  {c.schedule && <p style={{ fontSize: 13, color: MUTED, margin: '3px 0 0' }}>{c.schedule}</p>}
+                  {c.description && <p style={{ fontSize: 13, color: MUTED, margin: '3px 0 0' }}>{c.description}</p>}
+                  <p style={{ fontSize: 12, color: OLIVE, margin: '6px 0 0', fontWeight: 600 }}>{classEnrollments.length} student{classEnrollments.length !== 1 ? 's' : ''}</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => setExpandedClass(isExpanded ? null : c.id)} style={smallBtn}>
+                    {isExpanded ? 'Hide students ↑' : 'Manage students ↓'}
+                  </button>
+                  <button onClick={() => startEdit(c)} style={smallBtn}>Edit</button>
+                  <button onClick={() => remove(c.id)} style={{ ...smallBtn, color: DANGER }}>Delete</button>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div style={{ marginTop: 16, borderTop: '1px solid rgba(67,73,42,0.1)', paddingTop: 14 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 10px' }}>Students</p>
+                  {students.map(s => {
+                    const enrolled = enrolledIds.has(s.id)
+                    return (
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(67,73,42,0.06)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: '50%', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: TEXT }}>
+                            {(s.full_name || s.email)?.[0]?.toUpperCase()}
+                          </div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: TEXT, margin: 0 }}>{s.full_name || s.email}</p>
+                        </div>
+                        {enrolled
+                          ? <button onClick={() => unenroll(c.id, s.id)} style={{ ...smallBtn, color: DANGER }}>Remove</button>
+                          : <button onClick={() => enroll(c.id, s.id)} style={addBtn}>Add</button>
+                        }
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </Panel>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function EnrollmentManager({ classId, students }) {
-  const [enrollments, setEnrollments] = useState([])
+/* ── Lessons tab ── */
+function LessonsTab({ classes }) {
+  const [selectedClass, setSelectedClass] = useState('')
+  const [lessons, setLessons] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ title: '', description: '' })
+  const [editId, setEditId] = useState(null)
 
   useEffect(() => {
-    if (!classId) return
-    supabase.from('class_enrollments').select('student_id').eq('class_id', classId)
-      .then(({ data }) => setEnrollments((data || []).map(e => e.student_id)))
-  }, [classId])
+    if (selectedClass) fetchLessons()
+  }, [selectedClass])
 
-  async function toggle(studentId) {
-    if (enrollments.includes(studentId)) {
-      await supabase.from('class_enrollments').delete().eq('class_id', classId).eq('student_id', studentId)
-      setEnrollments(prev => prev.filter(id => id !== studentId))
+  async function fetchLessons() {
+    const { data } = await supabase.from('lessons').select('*').eq('class_id', selectedClass).order('created_at')
+    setLessons(data || [])
+  }
+
+  async function save() {
+    if (!form.title.trim() || !selectedClass) return
+    if (editId) {
+      await supabase.from('lessons').update(form).eq('id', editId)
     } else {
-      await supabase.from('class_enrollments').insert({ class_id: classId, student_id: studentId })
-      setEnrollments(prev => [...prev, studentId])
+      await supabase.from('lessons').insert({ ...form, class_id: selectedClass })
     }
+    setForm({ title: '', description: '' })
+    setEditId(null)
+    setShowForm(false)
+    fetchLessons()
   }
 
-  if (!classId) return null
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Enrolled students</label>
-      {students.map(s => (
-        <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer', fontSize: 14 }}>
-          <input type="checkbox" checked={enrollments.includes(s.id)} onChange={() => toggle(s.id)} />
-          {s.full_name} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>({s.email})</span>
-        </label>
-      ))}
-    </div>
-  )
-}
-
-// ── Assignments Tab ───────────────────────────────────────────────────────────
-
-function AssignmentsTab({ assignments, classes, students, onRefresh }) {
-  const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '', due_date: '', class_id: '' })
-  const [selectedStudents, setSelectedStudents] = useState([])
-  const [assignAll, setAssignAll] = useState(true)
-
-  async function save(e) {
-    e.preventDefault()
-    const { data: assignment } = await supabase.from('assignments').insert({
-      title: form.title, description: form.description,
-      due_date: form.due_date || null, class_id: form.class_id || null,
-    }).select().single()
-
-    if (!assignment) return
-
-    let targetStudents = students
-    if (!assignAll) {
-      targetStudents = students.filter(s => selectedStudents.includes(s.id))
-    } else if (form.class_id) {
-      const { data: enrolled } = await supabase.from('class_enrollments').select('student_id').eq('class_id', form.class_id)
-      targetStudents = students.filter(s => (enrolled || []).some(e => e.student_id === s.id))
-    }
-
-    if (targetStudents.length > 0) {
-      await supabase.from('student_assignments').insert(
-        targetStudents.map(s => ({ assignment_id: assignment.id, student_id: s.id, status: 'pending' }))
-      )
-    }
-
-    setShowModal(false)
-    setForm({ title: '', description: '', due_date: '', class_id: '' })
-    setSelectedStudents([])
-    onRefresh()
+  async function remove(id) {
+    if (!confirm('Delete this lesson?')) return
+    await supabase.from('lessons').delete().eq('id', id)
+    fetchLessons()
   }
 
-  async function deleteAssignment(id) {
-    if (!confirm('Delete this assignment?')) return
-    await supabase.from('assignments').delete().eq('id', id)
-    onRefresh()
+  function startEdit(l) {
+    setForm({ title: l.title, description: l.description || '' })
+    setEditId(l.id)
+    setShowForm(true)
   }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={sectionTitle}>Assignments ({assignments.length})</h2>
-        <button onClick={() => setShowModal(true)} style={addBtn}>+ New assignment</button>
+        <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, fontWeight: 700, color: TEXT, margin: 0 }}>Lessons</h2>
+        {selectedClass && <button onClick={() => { setShowForm(true); setEditId(null); setForm({ title: '', description: '' }) }} style={addBtn}>+ New lesson</button>}
       </div>
 
-      {showModal && (
-        <Modal title="New Assignment" onClose={() => setShowModal(false)}>
-          <form onSubmit={save}>
-            <FormField label="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required placeholder="Assignment title" />
-            <FormField label="Description" type="textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Instructions..." rows={4} />
-            <FormField label="Due date (optional)" type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
-            <FormField label="Class (optional)" type="select" value={form.class_id} onChange={e => setForm({ ...form, class_id: e.target.value })} options={classes.map(c => ({ value: c.id, label: c.name }))} />
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Assign to</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 14, cursor: 'pointer' }}>
-                <input type="checkbox" checked={assignAll} onChange={e => setAssignAll(e.target.checked)} />
-                {form.class_id ? 'All students in selected class' : 'All students'}
-              </label>
-              {!assignAll && students.map(s => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer', fontSize: 14 }}>
-                  <input type="checkbox" checked={selectedStudents.includes(s.id)}
-                    onChange={e => setSelectedStudents(prev => e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id))} />
-                  {s.full_name}
-                </label>
-              ))}
-            </div>
-            <button type="submit" style={{ ...addBtn, width: '100%' }}>Create assignment</button>
-          </form>
-        </Modal>
+      <div style={{ marginBottom: 20 }}>
+        <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+          style={{ padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 14, color: TEXT, background: 'white', cursor: 'pointer' }}>
+          <option value="">Select a class…</option>
+          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      {showForm && (
+        <div style={{ background: 'white', borderRadius: 16, padding: '20px 24px', marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,0.07)' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: TEXT, margin: '0 0 14px' }}>{editId ? 'Edit lesson' : 'New lesson'}</h3>
+          <Field label="Title" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Past tense verbs" />
+          <Field label="Description (optional)" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="What will students practice?" />
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button onClick={save} style={addBtn}>Save</button>
+            <button onClick={() => setShowForm(false)} style={cancelBtn}>Cancel</button>
+          </div>
+        </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {assignments.length === 0 && <Panel><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No assignments yet.</p></Panel>}
-        {assignments.map(a => (
-          <Panel key={a.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <strong style={{ fontSize: 16, color: 'var(--text-dark)' }}>{a.title}</strong>
-                {a.classes?.name && <span style={{ fontSize: 12, marginLeft: 10, background: 'var(--card-cream)', color: 'var(--text-dark)', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{a.classes.name}</span>}
-                {a.due_date && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Due: {new Date(a.due_date).toLocaleDateString()}</p>}
-                {a.description && <p style={{ fontSize: 13, color: 'var(--text-dark)', marginTop: 6, lineHeight: 1.5 }}>{a.description}</p>}
+      {selectedClass && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {lessons.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No lessons yet for this class.</p>}
+          {lessons.map((l, i) => (
+            <div key={l.id} style={{ background: 'white', borderRadius: 14, padding: '14px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: MUTED, flexShrink: 0 }}>{i + 1}</div>
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{l.title}</p>
+                  {l.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{l.description}</p>}
+                </div>
               </div>
-              <button onClick={() => deleteAssignment(a.id)} style={{ ...smallBtn, color: 'var(--danger)', flexShrink: 0, marginLeft: 12 }}>Delete</button>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button onClick={() => startEdit(l)} style={smallBtn}>Edit</button>
+                <button onClick={() => remove(l.id)} style={{ ...smallBtn, color: DANGER }}>Delete</button>
+              </div>
             </div>
-          </Panel>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-// ── Vocabulary Tab ────────────────────────────────────────────────────────────
+/* ── Student detail modal ── */
+function StudentModal({ student, classes, onClose, onRefresh }) {
+  const [tab, setTab] = useState('feedback')
+  const [feedback, setFeedback] = useState([])
+  const [assignments, setAssignments] = useState([])
+  const [enrollments, setEnrollments] = useState([])
+  const [preferences, setPreferences] = useState([])
+  const [activities, setActivities] = useState([])
+  const [vocabulary, setVocabulary] = useState([])
+  const [joinLink, setJoinLink] = useState(student.join_link || '')
+  const [savingLink, setSavingLink] = useState(false)
 
-function VocabularyTab({ vocabulary, students, onRefresh }) {
-  const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ word: '', definition: '', example: '', level: '' })
-  const [selectedStudents, setSelectedStudents] = useState([])
-  const [assignAll, setAssignAll] = useState(true)
-  const [search, setSearch] = useState('')
+  // feedback editing
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [newFeedback, setNewFeedback] = useState('')
 
-  async function save(e) {
-    e.preventDefault()
-    const { data: word } = await supabase.from('vocabulary').insert({
-      word: form.word, definition: form.definition,
-      example: form.example || null, level: form.level || null,
+  // class note
+  const [noteClass, setNoteClass] = useState('')
+  const [noteText, setNoteText] = useState('')
+  const [noteSent, setNoteSent] = useState(false)
+
+  // assignment form
+  const [assignForm, setAssignForm] = useState({ title: '', description: '', due_date: '', class_id: '' })
+  const [showAssignForm, setShowAssignForm] = useState(false)
+
+  // activity slots (fixed 4)
+  const ACTIVITY_SLOTS = [
+    { key: 'vocabulary_match', name: 'Vocabulary Match', icon: '📋' },
+    { key: 'listening_podcast', name: 'Listening Podcast', icon: '🎧' },
+    { key: 'culture_quiz', name: 'Culture Quiz', icon: '🌎' },
+    { key: 'grammar_sprint', name: 'Grammar Sprint', icon: '⚡' },
+  ]
+
+  // vocabulary form
+  const [vocabForm, setVocabForm] = useState({ word: '', definition: '', example: '' })
+  const [showVocabForm, setShowVocabForm] = useState(false)
+
+  // seen tracking
+  function getSeenIds() {
+    try { return new Set(JSON.parse(localStorage.getItem(`seen_${student.id}`) || '[]')) } catch { return new Set() }
+  }
+  function markIdSeen(id) {
+    const s = getSeenIds(); s.add(id)
+    localStorage.setItem(`seen_${student.id}`, JSON.stringify([...s]))
+  }
+  function onItemSeen() { onRefresh() }
+
+  useEffect(() => { fetchStudentData() }, [])
+
+  async function fetchStudentData() {
+    const sid = student.id
+    const [{ data: fb }, { data: sa }, { data: ce }, { data: act }, { data: sv }] = await Promise.all([
+      supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
+      supabase.from('student_assignments').select('*, assignments(*)').eq('student_id', sid),
+      supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', sid),
+      supabase.from('student_activities').select('*').eq('student_id', sid).order('position'),
+      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid).order('created_at'),
+    ])
+    const allFb = fb || []
+    setFeedback(allFb.filter(f => f.type !== 'preference' && f.type !== 'class_note' && f.type !== 'student_activity'))
+    setPreferences(allFb.filter(f => f.type === 'preference' || f.content?.startsWith('Preferred materials:')))
+    setAssignments(sa || [])
+    setEnrollments(ce || [])
+    setActivities(act || [])
+    setVocabulary(sv || [])
+  }
+
+  async function addFeedback() {
+    if (!newFeedback.trim()) return
+    await supabase.from('feedback').insert({ student_id: student.id, content: newFeedback })
+    setNewFeedback('')
+    fetchStudentData()
+  }
+
+  async function saveEdit(id) {
+    await supabase.from('feedback').update({ content: editText }).eq('id', id)
+    setEditingId(null)
+    fetchStudentData()
+  }
+
+  async function deleteFeedback(id) {
+    await supabase.from('feedback').delete().eq('id', id)
+    fetchStudentData()
+  }
+
+  async function sendClassNote() {
+    if (!noteText.trim() || !noteClass) return
+    await supabase.from('feedback').insert({ student_id: student.id, content: noteText, type: 'class_note', class_id: noteClass })
+    setNoteText(''); setNoteSent(true)
+    setTimeout(() => setNoteSent(false), 2000)
+    fetchStudentData()
+  }
+
+  async function createAssignment() {
+    if (!assignForm.title.trim()) return
+    const { data: a } = await supabase.from('assignments').insert({
+      title: assignForm.title, description: assignForm.description,
+      due_date: assignForm.due_date || null, class_id: assignForm.class_id || null,
     }).select().single()
+    if (a) await supabase.from('student_assignments').insert({ student_id: student.id, assignment_id: a.id, status: 'pending' })
+    setAssignForm({ title: '', description: '', due_date: '', class_id: '' })
+    setShowAssignForm(false)
+    fetchStudentData()
+  }
 
-    if (!word) return
-    const targets = assignAll ? students : students.filter(s => selectedStudents.includes(s.id))
-    if (targets.length > 0) {
-      await supabase.from('student_vocabulary').insert(targets.map(s => ({ vocabulary_id: word.id, student_id: s.id, status: 'new' })))
+  async function saveJoinLink() {
+    setSavingLink(true)
+    await supabase.from('profiles').update({ join_link: joinLink }).eq('id', student.id)
+    setSavingLink(false)
+  }
+
+  async function saveActivitySlot(key, name, icon, url) {
+    const existing = activities.find(a => a.slot_key === key)
+    if (existing) {
+      await supabase.from('student_activities').update({ url: url || null }).eq('id', existing.id)
+    } else {
+      await supabase.from('student_activities').insert({ student_id: student.id, name, icon, url: url || null, slot_key: key, position: ACTIVITY_SLOTS.findIndex(s => s.key === key) })
     }
-    setShowModal(false)
-    setForm({ word: '', definition: '', example: '', level: '' })
-    setSelectedStudents([])
-    onRefresh()
+    fetchStudentData()
   }
 
-  async function deleteWord(id) {
-    if (!confirm('Delete this word?')) return
-    await supabase.from('vocabulary').delete().eq('id', id)
-    onRefresh()
+  async function addVocab() {
+    if (!vocabForm.word.trim()) return
+    const { data: v } = await supabase.from('vocabulary').insert({
+      word: vocabForm.word.trim(), definition: vocabForm.definition.trim(), example: vocabForm.example.trim() || null,
+    }).select().single()
+    if (v) await supabase.from('student_vocabulary').insert({ student_id: student.id, vocabulary_id: v.id, status: 'learning' })
+    setVocabForm({ word: '', definition: '', example: '' })
+    setShowVocabForm(false)
+    fetchStudentData()
   }
 
-  const filtered = vocabulary.filter(v =>
-    v.word.toLowerCase().includes(search.toLowerCase()) ||
-    v.definition.toLowerCase().includes(search.toLowerCase())
-  )
+  async function deleteVocab(svId, vocabId) {
+    await supabase.from('student_vocabulary').delete().eq('id', svId)
+    await supabase.from('vocabulary').delete().eq('id', vocabId)
+    fetchStudentData()
+  }
+
+  async function enrollInClass(classId) {
+    await supabase.from('class_enrollments').upsert({ student_id: student.id, class_id: classId }, { onConflict: 'student_id,class_id' })
+    fetchStudentData()
+  }
+
+  async function unenroll(enrollmentId) {
+    await supabase.from('class_enrollments').delete().eq('id', enrollmentId)
+    fetchStudentData()
+  }
+
+  const TABS = ['feedback', 'class note', 'assignments', 'vocabulary', 'activities', 'join link', 'preferences', 'classes']
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <h2 style={sectionTitle}>Vocabulary ({vocabulary.length})</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search words..."
-            style={{ padding: '8px 14px', borderRadius: 20, border: '1.5px solid rgba(67,73,42,0.15)', background: 'white', color: 'var(--text-dark)', fontSize: 13, outline: 'none', width: 180 }} />
-          <button onClick={() => setShowModal(true)} style={addBtn}>+ Add word</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 620, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Modal header */}
+        <div style={{ padding: '20px 24px 0', borderBottom: '1px solid rgba(67,73,42,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, margin: 0 }}>{student.full_name || student.email}</h2>
+              <p style={{ fontSize: 13, color: MUTED, margin: '2px 0 0' }}>{student.email}</p>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: MUTED, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 1 }}>
+            {TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                padding: '7px 14px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 600, textTransform: 'capitalize', whiteSpace: 'nowrap',
+                background: tab === t ? CREAM : 'transparent',
+                color: tab === t ? TEXT : MUTED,
+              }}>{t}</button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {showModal && (
-        <Modal title="Add Vocabulary Word" onClose={() => setShowModal(false)}>
-          <form onSubmit={save}>
-            <FormField label="Word" value={form.word} onChange={e => setForm({ ...form, word: e.target.value })} required placeholder="e.g. serendipity" />
-            <FormField label="Definition" type="textarea" value={form.definition} onChange={e => setForm({ ...form, definition: e.target.value })} required placeholder="What does it mean?" rows={2} />
-            <FormField label="Example sentence (optional)" type="textarea" value={form.example} onChange={e => setForm({ ...form, example: e.target.value })} placeholder="e.g. She found the book by serendipity." rows={2} />
-            <FormField label="Level (optional)" type="select" value={form.level} onChange={e => setForm({ ...form, level: e.target.value })} options={['A1','A2','B1','B2','C1','C2'].map(l => ({ value: l, label: l }))} />
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Assign to</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 14, cursor: 'pointer' }}>
-                <input type="checkbox" checked={assignAll} onChange={e => setAssignAll(e.target.checked)} />
-                All students
-              </label>
-              {!assignAll && students.map(s => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer', fontSize: 14 }}>
-                  <input type="checkbox" checked={selectedStudents.includes(s.id)}
-                    onChange={e => setSelectedStudents(prev => e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id))} />
-                  {s.full_name}
-                </label>
+        {/* Modal body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+
+          {/* Feedback */}
+          {tab === 'feedback' && (
+            <div>
+              <div style={{ marginBottom: 16 }}>
+                <textarea value={newFeedback} onChange={e => setNewFeedback(e.target.value)} rows={3} placeholder="Write feedback for this student…"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
+                <button onClick={addFeedback} style={{ ...addBtn, marginTop: 8 }}>Add feedback</button>
+              </div>
+              {feedback.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>}
+              {feedback.map(f => (
+                <FeedbackItem key={f.id} f={f} editingId={editingId} editText={editText}
+                  onEdit={() => { setEditingId(f.id); setEditText(f.content) }}
+                  onEditChange={setEditText} onSaveEdit={() => saveEdit(f.id)}
+                  onCancelEdit={() => setEditingId(null)} onDelete={() => deleteFeedback(f.id)} />
               ))}
             </div>
-            <button type="submit" style={{ ...addBtn, width: '100%' }}>Add word</button>
-          </form>
-        </Modal>
-      )}
+          )}
 
-      <div style={gridStyle}>
-        {filtered.length === 0 && <Panel><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No words yet.</p></Panel>}
-        {filtered.map(v => (
-          <Panel key={v.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <strong style={{ fontSize: 17, color: 'var(--text-dark)' }}>{v.word}</strong>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                {v.level && <span style={{ fontSize: 11, background: 'var(--card-cream)', color: 'var(--text-dark)', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{v.level}</span>}
-                <button onClick={() => deleteWord(v.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
-              </div>
+          {/* Class note */}
+          {tab === 'class note' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>This note will appear in the student's Lessons section.</p>
+              <select value={noteClass} onChange={e => setNoteClass(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 14, color: TEXT, marginBottom: 10 }}>
+                <option value="">Select class…</option>
+                {enrollments.map(ce => <option key={ce.id} value={ce.classes?.id}>{ce.classes?.name}</option>)}
+              </select>
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="Write a note for this session…"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box', marginBottom: 10 }} />
+              <button onClick={sendClassNote} style={addBtn}>{noteSent ? 'Sent! ✓' : 'Send note'}</button>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--text-dark)', marginTop: 6, lineHeight: 1.5 }}>{v.definition}</p>
-            {v.example && <p style={{ fontSize: 12, fontStyle: 'italic', color: 'var(--text-muted)', marginTop: 6 }}>"{v.example}"</p>}
-          </Panel>
-        ))}
+          )}
+
+          {/* Assignments */}
+          {tab === 'assignments' && (
+            <div>
+              <button onClick={() => setShowAssignForm(x => !x)} style={{ ...addBtn, marginBottom: 14 }}>+ New assignment</button>
+              {showAssignForm && (
+                <div style={{ background: CREAM, borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                  <Field label="Title" value={assignForm.title} onChange={v => setAssignForm(f => ({ ...f, title: v }))} placeholder="Assignment title" />
+                  <Field label="Description" value={assignForm.description} onChange={v => setAssignForm(f => ({ ...f, description: v }))} placeholder="Instructions" />
+                  <Field label="Due date" value={assignForm.due_date} onChange={v => setAssignForm(f => ({ ...f, due_date: v }))} type="date" />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={createAssignment} style={addBtn}>Save</button>
+                    <button onClick={() => setShowAssignForm(false)} style={cancelBtn}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {assignments.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No assignments yet.</p>}
+              {assignments.map(sa => {
+                const seen = getSeenIds().has(sa.id)
+                return (
+                  <div key={sa.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div>
+                        <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{sa.assignments?.title || '(Untitled)'}</p>
+                        {sa.assignments?.description && <p style={{ fontSize: 12, color: MUTED, margin: '3px 0 0' }}>{sa.assignments.description}</p>}
+                        {sa.assignments?.due_date && <p style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>Due: {new Date(sa.assignments.due_date).toLocaleDateString()}</p>}
+                        <p style={{ fontSize: 12, margin: '6px 0 0', fontWeight: 600, color: sa.status === 'completed' ? OLIVE : ACCENT }}>
+                          {sa.status === 'completed' ? '✓ Completed' : 'Pending'}
+                        </p>
+                        {sa.student_response && (
+                          <div style={{ marginTop: 8, background: 'white', borderRadius: 8, padding: '8px 10px' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: MUTED, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Student response</p>
+                            <p style={{ fontSize: 13, color: TEXT, margin: 0 }}>{sa.student_response}</p>
+                          </div>
+                        )}
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flexShrink: 0 }}>
+                        <input type="checkbox" checked={seen} onChange={() => { markIdSeen(sa.id); onItemSeen() }} />
+                        <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap' }}>Evaluated</span>
+                      </label>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Vocabulary */}
+          {tab === 'vocabulary' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Words assigned here appear in the student's Vocabulary Match activity.</p>
+              <button onClick={() => setShowVocabForm(x => !x)} style={{ ...addBtn, marginBottom: 14 }}>+ Add word</button>
+              {showVocabForm && (
+                <div style={{ background: CREAM, borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                  <Field label="Word" value={vocabForm.word} onChange={v => setVocabForm(f => ({ ...f, word: v }))} placeholder="e.g. ambitious" />
+                  <Field label="Definition" value={vocabForm.definition} onChange={v => setVocabForm(f => ({ ...f, definition: v }))} placeholder="e.g. Having a strong desire to succeed" />
+                  <Field label="Example sentence (optional)" value={vocabForm.example} onChange={v => setVocabForm(f => ({ ...f, example: v }))} placeholder="e.g. She is an ambitious student." />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={addVocab} style={addBtn}>Save</button>
+                    <button onClick={() => setShowVocabForm(false)} style={cancelBtn}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {vocabulary.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>No vocabulary assigned yet.</p>}
+              {vocabulary.map(sv => (
+                <div key={sv.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{sv.vocabulary?.word}</p>
+                      <p style={{ fontSize: 13, color: MUTED, margin: '3px 0 0' }}>{sv.vocabulary?.definition}</p>
+                      {sv.vocabulary?.example && <p style={{ fontSize: 12, color: MUTED, fontStyle: 'italic', margin: '3px 0 0' }}>"{sv.vocabulary.example}"</p>}
+                      <span style={{ fontSize: 11, fontWeight: 600, color: sv.status === 'mastered' ? OLIVE : ACCENT, marginTop: 4, display: 'block' }}>
+                        {sv.status === 'mastered' ? '✓ Mastered' : 'Learning'}
+                      </span>
+                    </div>
+                    <button onClick={() => deleteVocab(sv.id, sv.vocabulary_id)} style={{ ...smallBtn, color: DANGER, flexShrink: 0 }}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Activities */}
+          {tab === 'activities' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 18 }}>Assign a link for each activity. Students will see clickable cards on their dashboard.</p>
+              {ACTIVITY_SLOTS.map(slot => {
+                const existing = activities.find(a => a.slot_key === slot.key)
+                return (
+                  <ActivitySlot key={slot.key} slot={slot} existing={existing} onSave={saveActivitySlot} />
+                )
+              })}
+            </div>
+          )}
+
+          {/* Join link */}
+          {tab === 'join link' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>This link will show as a "Join class" button on the student's dashboard.</p>
+              <Field label="Google Meet / Zoom link" value={joinLink} onChange={setJoinLink} placeholder="https://meet.google.com/…" />
+              <button onClick={saveJoinLink} disabled={savingLink} style={addBtn}>
+                {savingLink ? 'Saving…' : 'Save link'}
+              </button>
+            </div>
+          )}
+
+          {/* Preferences */}
+          {tab === 'preferences' && (
+            <div>
+              {preferences.length === 0
+                ? <p style={{ fontSize: 14, color: MUTED }}>No preferences sent yet.</p>
+                : preferences.map(p => {
+                  const parts = p.content.split('. Notes: ')
+                  const materials = parts[0].replace('Preferred materials: ', '').split(', ')
+                  const note = parts[1] || null
+                  const seen = getSeenIds().has(p.id)
+                  return (
+                    <div key={p.id} style={{ background: CREAM, borderRadius: 12, padding: '14px 16px', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>
+                          {new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={seen} onChange={() => { markIdSeen(p.id); onItemSeen() }} />
+                          <span style={{ fontSize: 11, color: MUTED }}>Mark seen</span>
+                        </label>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: note ? 10 : 0 }}>
+                        {materials.map(m => <span key={m} style={{ padding: '5px 12px', borderRadius: 20, background: TEXT, color: '#c2ca86', fontSize: 12, fontWeight: 600 }}>{m}</span>)}
+                      </div>
+                      {note && <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.5, fontStyle: 'italic', margin: 0 }}>"{note}"</p>}
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+
+          {/* Classes / enrollment */}
+          {tab === 'classes' && (
+            <div>
+              <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Enroll this student in your classes.</p>
+              {classes.map(c => {
+                const enrolled = enrollments.find(e => e.class_id === c.id)
+                return (
+                  <div key={c.id} style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{c.name}</p>
+                      {c.schedule && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{c.schedule}</p>}
+                    </div>
+                    {enrolled
+                      ? <button onClick={() => unenroll(enrolled.id)} style={{ ...smallBtn, color: DANGER }}>Remove</button>
+                      : <button onClick={() => enrollInClass(c.id)} style={addBtn}>Enroll</button>
+                    }
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Seen-item helpers (localStorage) ─────────────────────────────────────────
+/* ── Activity slot ── */
+function ActivitySlot({ slot, existing, onSave }) {
+  const [url, setUrl] = useState(existing?.url || '')
+  useEffect(() => { setUrl(existing?.url || '') }, [existing?.url])
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
-function getSeenIds() {
-  try { return new Set(JSON.parse(localStorage.getItem('teacher_seen_ids') || '[]')) } catch { return new Set() }
+  async function save() {
+    setSaving(true)
+    await onSave(slot.key, slot.name, slot.icon, url)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div style={{ background: CREAM, borderRadius: 12, padding: '14px 16px', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 22 }}>{slot.icon}</span>
+        <p style={{ fontWeight: 600, fontSize: 14, color: TEXT, margin: 0 }}>{slot.name}</p>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…"
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 13, color: TEXT, background: 'white' }} />
+        <button onClick={save} disabled={saving} style={addBtn}>
+          {saved ? '✓ Saved' : saving ? '…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
 }
-function markIdSeen(id) {
-  const s = getSeenIds(); s.add(id)
-  localStorage.setItem('teacher_seen_ids', JSON.stringify([...s]))
+
+/* ── Feedback item ── */
+function FeedbackItem({ f, editingId, editText, onEdit, onEditChange, onSaveEdit, onCancelEdit, onDelete }) {
+  const isEditing = editingId === f.id
+  return (
+    <div style={{ background: CREAM, borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+      {isEditing ? (
+        <>
+          <textarea value={editText} onChange={e => onEditChange(e.target.value)} rows={3}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13, border: '1.5px solid rgba(67,73,42,0.2)', resize: 'none', color: TEXT, boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={onSaveEdit} style={addBtn}>Save</button>
+            <button onClick={onCancelEdit} style={cancelBtn}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 14, lineHeight: 1.5, color: TEXT, margin: 0 }}>{f.content}</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <p style={{ fontSize: 11, color: MUTED, margin: 0 }}>{new Date(f.created_at).toLocaleDateString()}</p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={onEdit} style={smallBtn}>Edit</button>
+              <button onClick={onDelete} style={{ ...smallBtn, color: DANGER }}>Delete</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
-// ── Shared ────────────────────────────────────────────────────────────────────
+/* ── Field ── */
+function Field({ label, value, onChange, placeholder, type = 'text' }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5 }}>{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', fontSize: 13, color: TEXT, background: 'white', boxSizing: 'border-box' }} />
+    </div>
+  )
+}
 
-const sectionTitle = { fontSize: 18, fontWeight: 700, color: 'var(--text-dark)', margin: 0 }
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }
-const addBtn = { padding: '9px 20px', borderRadius: 20, border: 'none', background: 'var(--text-dark)', color: 'var(--card-green)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
-const smallBtn = { padding: '6px 12px', borderRadius: 20, border: 'none', background: 'rgba(67,73,42,0.08)', color: 'var(--text-dark)', fontSize: 12, cursor: 'pointer', fontWeight: 600 }
+const addBtn = { padding: '9px 18px', borderRadius: 10, border: 'none', background: TEXT, color: '#c2ca86', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+const cancelBtn = { padding: '9px 18px', borderRadius: 10, border: '1.5px solid rgba(67,73,42,0.2)', background: 'transparent', color: MUTED, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
+const smallBtn = { padding: '5px 12px', borderRadius: 8, border: '1.5px solid rgba(67,73,42,0.15)', background: 'transparent', color: MUTED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }

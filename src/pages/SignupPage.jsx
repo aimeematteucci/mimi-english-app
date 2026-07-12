@@ -43,7 +43,7 @@ export default function SignupPage() {
         <div style={styles.header}>
           <Logo size={64} />
           <div>
-            <h1 style={styles.title}>Join Mimi's English</h1>
+            <h1 style={styles.title}>Join EnglishBox Student</h1>
             <p style={styles.subtitle}>Create your student account</p>
           </div>
         </div>
