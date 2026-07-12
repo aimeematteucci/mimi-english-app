@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
@@ -22,13 +22,7 @@ export default function StudentDashboard() {
   const [classes, setClasses] = useState([])
   const [streak, setStreak] = useState(0)
 
-  useEffect(() => {
-    if (!profile) return
-    fetchData()
-    updateStreak()
-  }, [profile])
-
-  async function updateStreak() {
+  const updateStreak = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]
     const lastActive = profile.last_active_date
     let newStreak = profile.streak || 0
@@ -54,9 +48,9 @@ export default function StudentDashboard() {
         { onConflict: 'student_id,badge_type' }
       )
     }
-  }
+  }, [profile])
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     const sid = profile.id
     const { data: ce } = await supabase.from('class_enrollments').select('*, classes(*)').eq('student_id', sid)
     setClasses(ce || [])
@@ -91,7 +85,13 @@ export default function StudentDashboard() {
         { onConflict: 'student_id,badge_type' }
       )
     }
-  }
+  }, [profile])
+
+  useEffect(() => {
+    if (!profile) return
+    fetchData()
+    updateStreak()
+  }, [profile, fetchData, updateStreak])
 
   async function toggleLesson(lessonId) {
     const existing = studentLessons.find(sl => sl.lesson_id === lessonId)
