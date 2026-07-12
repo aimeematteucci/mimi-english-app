@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
@@ -17,9 +17,7 @@ export default function TeacherDashboard() {
   const [activeStudents, setActiveStudents] = useState(new Set())
   const [tab, setTab] = useState('students') // students | classes | lessons
 
-  useEffect(() => { fetchAll() }, [])
-
-  async function fetchAll() {
+  const fetchAll = useCallback(async () => {
     const [{ data: st }, { data: cl }, { data: subs }, { data: prefs }] = await Promise.all([
       supabase.from('profiles').select('*').eq('role', 'student').order('full_name'),
       supabase.from('classes').select('*').eq('teacher_id', profile.id).order('name'),
@@ -43,7 +41,9 @@ export default function TeacherDashboard() {
         .map(([id]) => id)
     )
     setActiveStudents(unread)
-  }
+  }, [profile])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
 
   function openStudent(s) {
     localStorage.setItem(`student_read_${s.id}`, new Date().toISOString())
@@ -267,14 +267,14 @@ function LessonsTab({ classes }) {
   const [form, setForm] = useState({ title: '', description: '' })
   const [editId, setEditId] = useState(null)
 
-  useEffect(() => {
-    if (selectedClass) fetchLessons()
-  }, [selectedClass])
-
-  async function fetchLessons() {
+  const fetchLessons = useCallback(async () => {
     const { data } = await supabase.from('lessons').select('*').eq('class_id', selectedClass).order('created_at')
     setLessons(data || [])
-  }
+  }, [selectedClass])
+
+  useEffect(() => {
+    if (selectedClass) fetchLessons()
+  }, [selectedClass, fetchLessons])
 
   async function save() {
     if (!form.title.trim() || !selectedClass) return
@@ -400,9 +400,7 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
   }
   function onItemSeen() { onRefresh() }
 
-  useEffect(() => { fetchStudentData() }, [])
-
-  async function fetchStudentData() {
+  const fetchStudentData = useCallback(async () => {
     const sid = student.id
     const [{ data: fb }, { data: sa }, { data: ce }, { data: act }, { data: sv }] = await Promise.all([
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
@@ -418,7 +416,9 @@ function StudentModal({ student, classes, onClose, onRefresh }) {
     setEnrollments(ce || [])
     setActivities(act || [])
     setVocabulary(sv || [])
-  }
+  }, [student.id])
+
+  useEffect(() => { fetchStudentData() }, [fetchStudentData])
 
   async function addFeedback() {
     if (!newFeedback.trim()) return
