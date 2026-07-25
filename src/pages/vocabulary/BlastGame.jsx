@@ -157,7 +157,7 @@ export default function BlastGame({ words, onExit, onStatus }) {
             <span style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{hitFx === a.uid ? '💥' : a.word}</span>
           </div>
         ))}
-        <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', fontSize: 26 }}>🛸</div>
+        <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', fontSize: FIELD_HEIGHT / 4, lineHeight: 1 }}>🛸</div>
       </div>
     </div>
   )
