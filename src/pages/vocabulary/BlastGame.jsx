@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import SpeakerButton from './SpeakerButton'
 
 const TEXT = '#1a1a1a'
 const MUTED = '#7a6a5a'
@@ -156,7 +155,6 @@ export default function BlastGame({ words, onExit, onStatus }) {
             transition: 'background 0.2s', whiteSpace: 'nowrap',
           }}>
             <span style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{hitFx === a.uid ? '💥' : a.word}</span>
-            {hitFx !== a.uid && <SpeakerButton word={a.word} style={{ width: 20, height: 20, fontSize: 10, background: 'rgba(255,255,255,0.25)' }} />}
           </div>
         ))}
         <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', fontSize: 26 }}>🛸</div>

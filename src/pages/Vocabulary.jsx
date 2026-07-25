@@ -88,7 +88,7 @@ export default function Vocabulary() {
                   ) : (
                     <>
                       <p className="nb-mono" style={{ fontSize: 12, color: MUTED, margin: '0 0 16px' }}>{words.length} word{words.length === 1 ? '' : 's'} to study</p>
-                      <div className="nb-shelf">
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
                         {MODES.map(m => (
                           <div key={m.key} onClick={() => setMode(m.key)} className="nb-shelf-card" style={{
                             background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)',
