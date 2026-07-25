@@ -47,8 +47,18 @@ export default function BlastGame({ words, onExit, onStatus }) {
   const [timeLeft, setTimeLeft] = useState(GAME_SECONDS)
   const [gameOver, setGameOver] = useState(false)
   const [hitFx, setHitFx] = useState(null)
+  const [shots, setShots] = useState([])
 
   const nextWave = useCallback(() => setWave(makeWave(words)), [words])
+
+  function fireShot(asteroid) {
+    const id = uid++
+    setShots(s => [...s, { id, top: 96, left: 50 }])
+    requestAnimationFrame(() => {
+      setShots(s => s.map(sh => sh.id === id ? { ...sh, top: asteroid.top, left: asteroid.left } : sh))
+    })
+    setTimeout(() => setShots(s => s.filter(sh => sh.id !== id)), 180)
+  }
 
   function loseLife() {
     setLives(l => {
@@ -60,6 +70,7 @@ export default function BlastGame({ words, onExit, onStatus }) {
 
   function blast(asteroid) {
     if (gameOver) return
+    fireShot(asteroid)
     if (asteroid.isTarget) {
       setScore(s => s + 1)
       onStatus(asteroid.vocabularyId, 'mastered')
@@ -131,9 +142,9 @@ export default function BlastGame({ words, onExit, onStatus }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <button onClick={onExit} className="nb-mono" style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 700, color: MUTED, cursor: 'pointer', padding: 0 }}>← Back to modes</button>
-        <span className="nb-mono" style={{ fontSize: 12, color: MUTED }}>⏱ {timeLeft}s · ❤️ {lives} · 🏆 {score}</span>
+      <button onClick={onExit} className="nb-mono" style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 700, color: MUTED, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Back to modes</button>
+      <div className="nb-mono" style={{ textAlign: 'center', fontSize: 26, fontWeight: 700, color: TEXT, marginBottom: 14 }}>
+        ⏱ {timeLeft}s &nbsp;·&nbsp; ❤️ {lives} &nbsp;·&nbsp; 🏆 {score}
       </div>
 
       <div style={{ background: '#141a24', borderRadius: 16, padding: '16px 20px', marginBottom: 10, textAlign: 'center' }}>
@@ -156,6 +167,14 @@ export default function BlastGame({ words, onExit, onStatus }) {
           }}>
             <span style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{hitFx === a.uid ? '💥' : a.word}</span>
           </div>
+        ))}
+        {shots.map(s => (
+          <div key={s.id} style={{
+            position: 'absolute', top: `${s.top}%`, left: `${s.left}%`, transform: 'translate(-50%, -50%)',
+            width: 9, height: 9, borderRadius: '50%', background: '#39ff6a',
+            boxShadow: '0 0 10px 4px rgba(57,255,106,0.75)', pointerEvents: 'none',
+            transition: 'top 0.18s linear, left 0.18s linear',
+          }} />
         ))}
         <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', fontSize: FIELD_HEIGHT / 4, lineHeight: 1 }}>🛸</div>
       </div>
