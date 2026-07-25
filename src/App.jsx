@@ -2,8 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
-import StudentDashboard from './pages/StudentDashboard'
-import TeacherDashboard from './pages/TeacherDashboard'
+import Notebook from './pages/Notebook'
+import TeacherPlaceholder from './pages/TeacherPlaceholder'
 
 function ProtectedRoute({ children, role }) {
   const { user, profile, loading } = useAuth()
@@ -24,12 +24,12 @@ export default function App() {
       <Route path="/signup" element={user ? <Navigate to="/dashboard" replace /> : <SignupPage />} />
       <Route path="/dashboard" element={
         <ProtectedRoute role="student">
-          <StudentDashboard />
+          <Notebook />
         </ProtectedRoute>
       } />
-      <Route path="/teacher/*" element={
+      <Route path="/teacher" element={
         <ProtectedRoute role="teacher">
-          <TeacherDashboard />
+          <TeacherPlaceholder />
         </ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to={user ? (profile?.role === 'teacher' ? '/teacher' : '/dashboard') : '/login'} replace />} />
