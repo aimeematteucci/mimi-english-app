@@ -156,6 +156,26 @@
   letter-spacing: 0.2px;
 }
 
+.nb-shelf-card.nb-static { cursor: default; }
+
+/* Unread indicator dot on a student shelf card */
+.nb-unread-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d94f4f;
+  box-shadow: 0 0 0 3px rgba(217,79,79,0.18);
+}
+
+.nb-back {
+  transition: opacity 0.15s ease;
+  cursor: pointer;
+}
+.nb-back:hover { opacity: 0.65; }
+
 /* File drop zone */
 .nb-dropzone {
   transition: border-color 0.15s ease, background 0.15s ease;

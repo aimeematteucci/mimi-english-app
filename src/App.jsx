@@ -3,7 +3,7 @@ import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import Notebook from './pages/Notebook'
-import TeacherPlaceholder from './pages/TeacherPlaceholder'
+import TeacherDashboard from './pages/TeacherDashboard'
 
 function ProtectedRoute({ children, role }) {
   const { user, profile, loading } = useAuth()
@@ -29,7 +29,7 @@ export default function App() {
       } />
       <Route path="/teacher" element={
         <ProtectedRoute role="teacher">
-          <TeacherPlaceholder />
+          <TeacherDashboard />
         </ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to={user ? (profile?.role === 'teacher' ? '/teacher' : '/dashboard') : '/login'} replace />} />
