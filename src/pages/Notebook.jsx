@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import './notebook.css'
 
 const ACCENT = '#c17c4a'
-const SIDEBAR_BG = '#e8e1d8'
 const PAGE_BG = '#f2ece4'
 const CARD_BG = '#ffffff'
 const LIGHT = '#f8f5f2'
 const TEXT = '#1a1a1a'
 const MUTED = '#7a6a5a'
 const OLIVE = '#8d9a55'
+const SLATE = '#6f8fa3'
+const PLUM = '#a56b7c'
+const GRAY = '#948a7d'
 
 const FILE_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.mp3,.m4a,.wav,.ogg'
 const MAX_FILE_MB = 20
@@ -55,155 +58,157 @@ export default function Notebook() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night'
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
-      {/* ── Sidebar ── */}
-      <aside style={{
-        width: 220, flexShrink: 0, background: SIDEBAR_BG,
-        padding: '32px 20px', display: 'flex', flexDirection: 'column', gap: 24,
-        borderRight: '1px solid rgba(0,0,0,0.07)',
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%', background: '#d4c4b5',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 26, fontWeight: 700, color: '#5c4a3a',
-          }}>{firstName[0]?.toUpperCase()}</div>
-          <p style={{ fontWeight: 700, fontSize: 16, color: TEXT, margin: 0, textAlign: 'center' }}>{profile?.full_name}</p>
-        </div>
-
-        <div style={{ marginTop: 'auto' }}>
-          <button onClick={signOut} style={{
-            width: '100%', padding: '9px', borderRadius: 10,
-            border: '1.5px solid rgba(0,0,0,0.12)', background: 'transparent',
-            fontSize: 13, color: MUTED, cursor: 'pointer',
-          }}>Sign out</button>
-        </div>
-      </aside>
-
-      {/* ── Main ── */}
-      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto', maxWidth: 900 }}>
-
-        {/* Header card */}
-        <div style={{
-          background: CARD_BG, borderRadius: 20, padding: '24px 28px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 28, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', gap: 16,
-        }}>
-          <div>
-            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 30, fontWeight: 800, color: TEXT, margin: 0 }}>
-              {firstName}'s Notebook
-            </h1>
-            <p style={{ fontSize: 14, color: MUTED, margin: '6px 0 0' }}>{greeting}, {firstName}!</p>
+      {/* ── Hero cover ── */}
+      <div className="nb-hero" style={{ padding: '54px 32px 64px' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #d4c4b5, #b89a82)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 24, fontWeight: 700, color: '#3a2e22', flexShrink: 0,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+            }}>{firstName[0]?.toUpperCase()}</div>
+            <div>
+              <h1 style={{
+                fontFamily: "'Playfair Display', Georgia, serif", fontSize: 44, fontWeight: 800,
+                color: '#f7f2ea', margin: 0, lineHeight: 1.05, textShadow: '0 2px 20px rgba(0,0,0,0.4)',
+              }}>
+                {firstName}'s Notebook
+              </h1>
+              <p style={{
+                fontFamily: "'Caveat', cursive", fontSize: 24, fontWeight: 700,
+                color: '#e3d9c8', margin: '4px 0 0',
+              }}>
+                {greeting}, {firstName}! ✎
+              </p>
+            </div>
           </div>
-          {profile?.join_link && (
-            <a href={profile.join_link} target="_blank" rel="noopener noreferrer" style={{
-              display: 'flex', alignItems: 'center', gap: 8, background: ACCENT, color: 'white',
-              borderRadius: 12, padding: '12px 20px', fontSize: 14, fontWeight: 600,
-              textDecoration: 'none', flexShrink: 0,
-            }}>
-              🎥 Join class
-            </a>
-          )}
-        </div>
 
-        {/* Extra activities */}
-        <section style={{ marginBottom: 28 }}>
-          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Extra activities</h2>
-          <Card>
-            {studentLessons.length === 0 ? (
-              <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No activities assigned yet.</p>
-            ) : (
-              <>
-                <p style={{ fontSize: 13, color: MUTED, margin: '0 0 14px' }}>{completedCount} of {studentLessons.length} completed</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {studentLessons.map(sl => {
-                    const done = sl.status === 'completed'
-                    return (
-                      <div key={sl.id} onClick={() => toggleLesson(sl)} style={{
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                        borderRadius: 12, cursor: 'pointer', transition: 'background 0.15s',
-                        background: done ? 'rgba(141,154,85,0.09)' : LIGHT,
-                        border: `1.5px solid ${done ? 'rgba(141,154,85,0.2)' : 'transparent'}`,
-                      }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                          background: done ? OLIVE : 'white',
-                          border: `2px solid ${done ? OLIVE : 'rgba(0,0,0,0.15)'}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {profile?.join_link && (
+              <a href={profile.join_link} target="_blank" rel="noopener noreferrer" className="nb-hero-cta" style={{
+                display: 'flex', alignItems: 'center', gap: 10, background: ACCENT, color: 'white',
+                borderRadius: 14, padding: '15px 26px', fontSize: 16, fontWeight: 700,
+                textDecoration: 'none', flexShrink: 0,
+              }}>
+                ▶ Join class
+              </a>
+            )}
+            <button onClick={signOut} style={{
+              padding: '15px 18px', borderRadius: 14,
+              border: '1.5px solid rgba(255,255,255,0.25)', background: 'transparent',
+              fontSize: 13, color: 'rgba(255,255,255,0.75)', cursor: 'pointer',
+            }}>Sign out</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Page body ── */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 32px' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: 900 }}>
+
+          {/* spiral binding along the left edge */}
+          <div className="nb-spiral">
+            {Array.from({ length: 9 }).map((_, i) => <div key={i} className="nb-ring" />)}
+          </div>
+
+          <main className="nb-page" style={{ padding: '40px 8px 60px 36px' }}>
+            <div className="nb-margin-line" />
+
+            {/* Extra activities */}
+            <Section tab="Extra activities" color={OLIVE} icon="📌">
+              {studentLessons.length === 0 ? (
+                <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No activities assigned yet.</p>
+              ) : (
+                <>
+                  <p className="nb-mono" style={{ fontSize: 12, color: MUTED, margin: '0 0 14px' }}>{completedCount} / {studentLessons.length} completed</p>
+                  <div className="nb-shelf">
+                    {studentLessons.map(sl => {
+                      const done = sl.status === 'completed'
+                      return (
+                        <div key={sl.id} onClick={() => toggleLesson(sl)} className="nb-shelf-card" style={{
+                          background: done ? 'rgba(141,154,85,0.09)' : LIGHT,
+                          border: `1.5px solid ${done ? 'rgba(141,154,85,0.25)' : 'rgba(0,0,0,0.06)'}`,
+                          borderRadius: 14, padding: '16px 16px 18px',
                         }}>
-                          {done && <span style={{ color: 'white', fontSize: 11, fontWeight: 800 }}>✓</span>}
-                        </div>
-                        <div style={{ flex: 1 }}>
+                          {done && <span className="nb-stamp">✓ DONE</span>}
                           <p style={{
-                            fontWeight: 600, fontSize: 14, margin: 0,
+                            fontWeight: 700, fontSize: 14, margin: 0,
                             color: done ? MUTED : TEXT, textDecoration: done ? 'line-through' : 'none',
                           }}>{sl.lessons?.title}</p>
-                          {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>{sl.lessons.description}</p>}
+                          {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '5px 0 0', lineHeight: 1.4 }}>{sl.lessons.description}</p>}
                           {sl.lessons?.url && (
                             <a href={sl.lessons.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                              style={{ fontSize: 12, color: ACCENT, fontWeight: 600, margin: '4px 0 0', display: 'inline-block' }}>
+                              style={{ fontSize: 12, color: ACCENT, fontWeight: 700, margin: '8px 0 0', display: 'inline-block' }}>
                               Open ↗
                             </a>
                           )}
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </Card>
-        </section>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </Section>
 
-        {/* Vocabulary training — coming soon */}
-        <section style={{ marginBottom: 28 }}>
-          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Vocabulary training</h2>
-          <Card>
-            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>🚧 Coming soon.</p>
-          </Card>
-        </section>
+            {/* Vocabulary — locked / coming soon */}
+            <Section tab="Vocabulary training" color={GRAY} icon="🔒">
+              <div className="nb-locked" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+                <span style={{ fontSize: 22 }}>🔒</span>
+                <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Coming soon — a full vocabulary trainer is on its way.</p>
+              </div>
+            </Section>
 
-        {/* Feedback + Files */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-          <FeedbackSection feedback={feedback} />
-          <FilesSection profile={profile} files={files} onUpdate={fetchData} />
+            {/* Feedback + Files */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 8 }}>
+              <FeedbackSection feedback={feedback} />
+              <FilesSection profile={profile} files={files} onUpdate={fetchData} />
+            </div>
+
+            {/* Suggest a lesson */}
+            <SuggestSection profile={profile} suggestions={suggestions} onSent={fetchData} />
+          </main>
         </div>
-
-        {/* Suggest a lesson */}
-        <section>
-          <SuggestSection profile={profile} suggestions={suggestions} onSent={fetchData} />
-        </section>
-      </main>
+      </div>
     </div>
   )
 }
 
-/* ── Card wrapper ── */
-function Card({ children }) {
+/* ── Section wrapper with an index tab ── */
+function Section({ tab, color, icon, children }) {
   return (
-    <div style={{ background: CARD_BG, borderRadius: 20, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-      {children}
-    </div>
+    <section style={{ marginBottom: 30 }}>
+      <span className="nb-tab" style={{ background: color }}>
+        <span>{icon}</span>{tab}
+      </span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        {children}
+      </div>
+    </section>
   )
 }
 
 /* ── Feedback ── */
 function FeedbackSection({ feedback }) {
   return (
-    <Card>
-      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, marginBottom: 14 }}>Feedback from Aimee</h2>
-      {feedback.length === 0
-        ? <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>
-        : feedback.slice(0, 5).map(f => (
-          <div key={f.id} style={{ background: LIGHT, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
-            <p style={{ fontSize: 14, color: TEXT, lineHeight: 1.6, margin: 0 }}>{f.content}</p>
-            <p style={{ fontSize: 11, color: MUTED, margin: '6px 0 0' }}>
-              {new Date(f.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-        ))}
-    </Card>
+    <div style={{ marginBottom: 8 }}>
+      <span className="nb-tab" style={{ background: ACCENT }}><span>💬</span>Feedback</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        {feedback.length === 0
+          ? <p style={{ fontSize: 14, color: MUTED }}>No feedback yet.</p>
+          : feedback.slice(0, 5).map(f => (
+            <div key={f.id} className="nb-note" style={{ background: '#fdf6e3', borderRadius: 10, padding: '16px 16px 14px', marginBottom: 16, boxShadow: '0 3px 8px rgba(0,0,0,0.08)' }}>
+              <p style={{ fontSize: 14, color: TEXT, lineHeight: 1.6, margin: 0 }}>{f.content}</p>
+              <p style={{ fontFamily: "'Caveat', cursive", fontSize: 16, fontWeight: 700, color: MUTED, margin: '6px 0 0' }}>
+                — {new Date(f.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+          ))}
+      </div>
+    </div>
   )
 }
 
@@ -243,42 +248,44 @@ function FilesSection({ profile, files, onUpdate }) {
   }
 
   return (
-    <Card>
-      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, marginBottom: 6 }}>Send a file</h2>
-      <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Homework, essays, audio recordings — docs, images, and audio up to {MAX_FILE_MB}MB.</p>
+    <div style={{ marginBottom: 8 }}>
+      <span className="nb-tab" style={{ background: SLATE }}><span>📎</span>Send a file</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>Homework, essays, audio recordings — docs, images, and audio up to {MAX_FILE_MB}MB.</p>
 
-      <label style={{
-        display: 'block', textAlign: 'center', padding: '14px', borderRadius: 12,
-        border: '1.5px dashed rgba(0,0,0,0.2)', cursor: uploading ? 'default' : 'pointer',
-        fontSize: 13, fontWeight: 600, color: uploading ? MUTED : ACCENT, marginBottom: 14,
-      }}>
-        {uploading ? 'Uploading…' : '📎 Choose a file to send'}
-        <input type="file" accept={FILE_ACCEPT} onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
-      </label>
+        <label className="nb-dropzone" style={{
+          display: 'block', textAlign: 'center', padding: '16px', borderRadius: 12,
+          border: '1.5px dashed rgba(0,0,0,0.2)', cursor: uploading ? 'default' : 'pointer',
+          fontSize: 13, fontWeight: 700, color: uploading ? MUTED : SLATE, marginBottom: 14,
+        }}>
+          {uploading ? 'Uploading…' : '📎 Choose a file to send'}
+          <input type="file" accept={FILE_ACCEPT} onChange={handleUpload} disabled={uploading} style={{ display: 'none' }} />
+        </label>
 
-      {error && <p style={{ fontSize: 12, color: '#d94f4f', margin: '0 0 12px' }}>{error}</p>}
+        {error && <p style={{ fontSize: 12, color: '#d94f4f', margin: '0 0 12px' }}>{error}</p>}
 
-      {files.length === 0 ? (
-        <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No files sent yet.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {files.map(f => (
-            <div key={f.id} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: LIGHT, borderRadius: 10, padding: '10px 12px',
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: TEXT, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file_name}</p>
-                <p style={{ fontSize: 11, color: MUTED, margin: '2px 0 0' }}>{new Date(f.uploaded_at).toLocaleDateString()}</p>
+        {files.length === 0 ? (
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No files sent yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {files.map(f => (
+              <div key={f.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: LIGHT, borderRadius: 10, padding: '10px 12px',
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="nb-mono" style={{ fontSize: 12, fontWeight: 700, color: TEXT, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file_name}</p>
+                  <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>{new Date(f.uploaded_at).toLocaleDateString()}</p>
+                </div>
+                <button onClick={() => removeFile(f)} style={{
+                  background: 'none', border: 'none', color: '#d94f4f', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                }}>Remove</button>
               </div>
-              <button onClick={() => removeFile(f)} style={{
-                background: 'none', border: 'none', color: '#d94f4f', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-              }}>Remove</button>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -304,40 +311,41 @@ function SuggestSection({ profile, suggestions, onSent }) {
   }
 
   return (
-    <Card>
-      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: TEXT, marginBottom: 6 }}>Suggest a lesson</h2>
-      <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>A video, a movie, a song, specific vocabulary — anything you'd like to study next.</p>
+    <div>
+      <span className="nb-tab" style={{ background: PLUM }}><span>💡</span>Suggest a lesson</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>A video, a movie, a song, specific vocabulary — anything you'd like to study next.</p>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-        {SUGGESTION_TYPES.map(t => (
-          <button key={t} onClick={() => setSelected(t)} style={{
-            padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            transition: 'all 0.15s',
-            background: selected === t ? ACCENT : 'transparent',
-            color: selected === t ? 'white' : TEXT,
-            border: `1.5px solid ${selected === t ? ACCENT : 'rgba(0,0,0,0.15)'}`,
-          }}>{t}</button>
-        ))}
-      </div>
-      <textarea value={note} onChange={e => setNote(e.target.value)}
-        placeholder="Tell us more (title, link, topic…)" rows={2}
-        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', background: LIGHT, resize: 'none', boxSizing: 'border-box', color: TEXT }} />
-      <button onClick={send} style={{
-        marginTop: 10, padding: '12px 20px', borderRadius: 12, border: 'none',
-        background: ACCENT, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-      }}>{sent ? 'Sent! ✓' : '✈ Send to my tutor'}</button>
-
-      {suggestions.length > 0 && (
-        <div style={{ marginTop: 20, borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 16 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 10px' }}>Sent suggestions</p>
-          {suggestions.slice(0, 5).map(s => (
-            <div key={s.id} style={{ background: LIGHT, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
-              <p style={{ fontSize: 13, color: TEXT, margin: 0 }}>{s.content}</p>
-              <p style={{ fontSize: 11, color: MUTED, margin: '4px 0 0' }}>{new Date(s.created_at).toLocaleDateString()}</p>
-            </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+          {SUGGESTION_TYPES.map(t => (
+            <button key={t} onClick={() => setSelected(t)} className="nb-chip" style={{
+              padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: selected === t ? PLUM : 'transparent',
+              color: selected === t ? 'white' : TEXT,
+              border: `1.5px solid ${selected === t ? PLUM : 'rgba(0,0,0,0.15)'}`,
+            }}>{t}</button>
           ))}
         </div>
-      )}
-    </Card>
+        <textarea value={note} onChange={e => setNote(e.target.value)}
+          placeholder="Tell us more (title, link, topic…)" rows={2}
+          style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', background: LIGHT, resize: 'none', boxSizing: 'border-box', color: TEXT }} />
+        <button onClick={send} style={{
+          marginTop: 10, padding: '12px 20px', borderRadius: 12, border: 'none',
+          background: PLUM, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+        }}>{sent ? 'Sent! ✓' : '✈ Send to my tutor'}</button>
+
+        {suggestions.length > 0 && (
+          <div style={{ marginTop: 20, borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 16 }}>
+            <p className="nb-mono" style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>Sent suggestions</p>
+            {suggestions.slice(0, 5).map(s => (
+              <div key={s.id} style={{ background: LIGHT, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+                <p style={{ fontSize: 13, color: TEXT, margin: 0 }}>{s.content}</p>
+                <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: '4px 0 0' }}>{new Date(s.created_at).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
