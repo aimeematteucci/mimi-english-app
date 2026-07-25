@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import './notebook.css'
@@ -23,19 +24,22 @@ export default function Notebook() {
   const [feedback, setFeedback] = useState([])
   const [files, setFiles] = useState([])
   const [suggestions, setSuggestions] = useState([])
+  const [vocabCount, setVocabCount] = useState(0)
 
   const fetchData = useCallback(async () => {
     const sid = profile.id
-    const [{ data: sl }, { data: fb }, { data: sf }] = await Promise.all([
+    const [{ data: sl }, { data: fb }, { data: sf }, { count }] = await Promise.all([
       supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
+      supabase.from('student_vocabulary').select('id', { count: 'exact', head: true }).eq('student_id', sid),
     ])
     setStudentLessons(sl || [])
     const allFb = fb || []
     setFeedback(allFb.filter(f => f.type !== 'preference' && f.type !== 'suggestion'))
     setSuggestions(allFb.filter(f => f.type === 'suggestion'))
     setFiles(sf || [])
+    setVocabCount(count || 0)
   }, [profile])
 
   useEffect(() => {
@@ -154,12 +158,24 @@ export default function Notebook() {
               )}
             </Section>
 
-            {/* Vocabulary — locked / coming soon */}
-            <Section tab="Vocabulary training" color={GRAY} icon="🔒">
-              <div className="nb-locked" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
-                <span style={{ fontSize: 22 }}>🔒</span>
-                <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Coming soon — a full vocabulary trainer is on its way.</p>
-              </div>
+            {/* Vocabulary training */}
+            <Section tab="Vocabulary training" color={GRAY} icon="📚">
+              {vocabCount === 0 ? (
+                <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No words assigned yet — check back soon!</p>
+              ) : (
+                <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+                  <div className="nb-shelf-card" style={{
+                    background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)', borderRadius: 14,
+                    padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                  }}>
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{vocabCount} word{vocabCount === 1 ? '' : 's'} to study</p>
+                      <p style={{ fontSize: 12, color: MUTED, margin: '4px 0 0' }}>Flashcards, quiz, matching, and a blast game.</p>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, whiteSpace: 'nowrap' }}>▶ Start studying</span>
+                  </div>
+                </Link>
+              )}
             </Section>
 
             {/* Feedback + Files */}

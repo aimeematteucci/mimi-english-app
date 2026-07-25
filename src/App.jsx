@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import Notebook from './pages/Notebook'
+import Vocabulary from './pages/Vocabulary'
 import TeacherDashboard from './pages/TeacherDashboard'
 
 function ProtectedRoute({ children, role }) {
@@ -25,6 +26,11 @@ export default function App() {
       <Route path="/dashboard" element={
         <ProtectedRoute role="student">
           <Notebook />
+        </ProtectedRoute>
+      } />
+      <Route path="/vocabulary" element={
+        <ProtectedRoute role="student">
+          <Vocabulary />
         </ProtectedRoute>
       } />
       <Route path="/teacher" element={

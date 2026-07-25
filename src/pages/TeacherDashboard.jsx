@@ -12,6 +12,7 @@ const MUTED = '#7a6a5a'
 const OLIVE = '#8d9a55'
 const SLATE = '#6f8fa3'
 const PLUM = '#a56b7c'
+const GRAY = '#948a7d'
 const DANGER = '#d94f4f'
 
 export default function TeacherDashboard() {
@@ -154,22 +155,25 @@ function StudentEditor({ student, onBack }) {
   const [feedback, setFeedback] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [files, setFiles] = useState([])
+  const [vocabulary, setVocabulary] = useState([])
   const [joinLink, setJoinLink] = useState(student.join_link || '')
   const [savingLink, setSavingLink] = useState(false)
   const [linkSaved, setLinkSaved] = useState(false)
 
   const fetchAll = useCallback(async () => {
     const sid = student.id
-    const [{ data: sl }, { data: fb }, { data: sf }] = await Promise.all([
+    const [{ data: sl }, { data: fb }, { data: sf }, { data: sv }] = await Promise.all([
       supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
+      supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid),
     ])
     setLessons(sl || [])
     const allFb = fb || []
     setFeedback(allFb.filter(f => f.type !== 'preference' && f.type !== 'suggestion'))
     setSuggestions(allFb.filter(f => f.type === 'suggestion'))
     setFiles(sf || [])
+    setVocabulary(sv || [])
   }, [student.id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
@@ -185,6 +189,12 @@ function StudentEditor({ student, onBack }) {
   async function removeLesson(studentLessonId, lessonId) {
     await supabase.from('student_lessons').delete().eq('id', studentLessonId)
     await supabase.from('lessons').delete().eq('id', lessonId)
+    fetchAll()
+  }
+
+  async function removeVocab(svId, vocabId) {
+    await supabase.from('student_vocabulary').delete().eq('id', svId)
+    await supabase.from('vocabulary').delete().eq('id', vocabId)
     fetchAll()
   }
 
@@ -248,6 +258,30 @@ function StudentEditor({ student, onBack }) {
                   {sl.lessons?.description && <p style={{ fontSize: 12, color: MUTED, margin: '5px 0 0', lineHeight: 1.4 }}>{sl.lessons.description}</p>}
                   {sl.lessons?.url && <p className="nb-mono" style={{ fontSize: 11, color: ACCENT, margin: '8px 0 0', wordBreak: 'break-all' }}>{sl.lessons.url}</p>}
                   <button onClick={() => removeLesson(sl.id, sl.lesson_id)} style={{ ...smallBtn, marginTop: 10, color: DANGER }}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Vocabulary */}
+      <section style={{ marginBottom: 30 }}>
+        <span className="nb-tab" style={{ background: GRAY }}><span>📚</span>Vocabulary</span>
+        <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+          <NewVocabForm studentId={student.id} onCreated={fetchAll} />
+          {vocabulary.length === 0 ? (
+            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No words assigned yet.</p>
+          ) : (
+            <div className="nb-shelf">
+              {vocabulary.map(sv => (
+                <div key={sv.id} className="nb-shelf-card nb-static" style={{
+                  background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)', borderRadius: 14, padding: '16px 16px 18px',
+                }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{sv.vocabulary?.word}</p>
+                  <p style={{ fontSize: 12, color: MUTED, margin: '5px 0 0', lineHeight: 1.4 }}>{sv.vocabulary?.definition}</p>
+                  {sv.vocabulary?.example && <p style={{ fontSize: 12, color: MUTED, fontStyle: 'italic', margin: '5px 0 0' }}>"{sv.vocabulary.example}"</p>}
+                  <button onClick={() => removeVocab(sv.id, sv.vocabulary_id)} style={{ ...smallBtn, marginTop: 10, color: DANGER }}>Remove</button>
                 </div>
               ))}
             </div>
@@ -328,6 +362,37 @@ function NewLessonForm({ studentId, onCreated }) {
       <Field label="Title" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Past tense verbs" />
       <Field label="Description (optional)" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="What will the student practice?" />
       <Field label="Link (optional)" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://…" />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={create} style={addBtn}>Save</button>
+        <button onClick={() => setOpen(false)} style={cancelBtn}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+/* ── New vocabulary word form ── */
+function NewVocabForm({ studentId, onCreated }) {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ word: '', definition: '', example: '' })
+
+  async function create() {
+    if (!form.word.trim() || !form.definition.trim()) return
+    const { data: v } = await supabase.from('vocabulary').insert({
+      word: form.word.trim(), definition: form.definition.trim(), example: form.example.trim() || null,
+    }).select().single()
+    if (v) await supabase.from('student_vocabulary').insert({ student_id: studentId, vocabulary_id: v.id, status: 'learning' })
+    setForm({ word: '', definition: '', example: '' })
+    setOpen(false)
+    onCreated()
+  }
+
+  if (!open) return <button onClick={() => setOpen(true)} style={{ ...addBtn, marginBottom: 16 }}>+ New word</button>
+
+  return (
+    <div style={{ background: LIGHT, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+      <Field label="Word" value={form.word} onChange={v => setForm(f => ({ ...f, word: v }))} placeholder="e.g. ambitious" />
+      <Field label="Definition" value={form.definition} onChange={v => setForm(f => ({ ...f, definition: v }))} placeholder="e.g. Having a strong desire to succeed" />
+      <Field label="Example sentence (optional)" value={form.example} onChange={v => setForm(f => ({ ...f, example: v }))} placeholder="e.g. She is an ambitious student." />
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={create} style={addBtn}>Save</button>
         <button onClick={() => setOpen(false)} style={cancelBtn}>Cancel</button>
