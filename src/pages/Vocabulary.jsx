@@ -8,6 +8,7 @@ import Flashcards from './vocabulary/Flashcards'
 import Quiz from './vocabulary/Quiz'
 import Matching from './vocabulary/Matching'
 import BlastGame from './vocabulary/BlastGame'
+import FillBlank from './vocabulary/FillBlank'
 
 const PAGE_BG = '#f2ece4'
 const CARD_BG = '#ffffff'
@@ -21,6 +22,7 @@ const MODES = [
   { key: 'quiz', name: 'Quiz', icon: '❓', desc: 'Multiple choice, pick the right definition.' },
   { key: 'matching', name: 'Matching', icon: '🧩', desc: 'Find every word–definition pair.' },
   { key: 'blast', name: 'Blast', icon: '🚀', desc: 'Blast the asteroid before time runs out.' },
+  { key: 'fillblank', name: 'Fill in the Blank', icon: '✏️', desc: 'Complete the sentence with the right word.' },
 ]
 
 const todayString = () => new Date().toISOString().slice(0, 10)
@@ -137,7 +139,7 @@ export default function Vocabulary() {
                         {laterWords.length > 0 && ` · ${laterWords.length} more available`}
                       </p>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-                        {MODES.map(m => (
+                        {MODES.filter(m => m.key !== 'fillblank' || profile?.fill_blank_enabled).map(m => (
                           <div key={m.key} onClick={() => chooseMode(m.key)} className="nb-shelf-card" style={{
                             background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)',
                             borderRadius: 14, padding: '22px 16px', textAlign: 'center',
@@ -166,5 +168,6 @@ function ModeRunner({ mode, words, reserveWords, onExit, onReview }) {
   if (mode === 'quiz') return <Quiz {...props} />
   if (mode === 'matching') return <Matching {...props} />
   if (mode === 'blast') return <BlastGame {...props} />
+  if (mode === 'fillblank') return <FillBlank {...props} />
   return null
 }

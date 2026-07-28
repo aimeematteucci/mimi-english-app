@@ -159,6 +159,7 @@ function StudentEditor({ student, onBack }) {
   const [joinLink, setJoinLink] = useState(student.join_link || '')
   const [savingLink, setSavingLink] = useState(false)
   const [linkSaved, setLinkSaved] = useState(false)
+  const [fillBlankEnabled, setFillBlankEnabled] = useState(!!student.fill_blank_enabled)
 
   const fetchAll = useCallback(async () => {
     const sid = student.id
@@ -184,6 +185,12 @@ function StudentEditor({ student, onBack }) {
     setSavingLink(false)
     setLinkSaved(true)
     setTimeout(() => setLinkSaved(false), 2000)
+  }
+
+  async function toggleFillBlank() {
+    const next = !fillBlankEnabled
+    setFillBlankEnabled(next)
+    await supabase.from('profiles').update({ fill_blank_enabled: next }).eq('id', student.id)
   }
 
   async function removeLesson(studentLessonId, lessonId) {
@@ -269,6 +276,17 @@ function StudentEditor({ student, onBack }) {
       <section style={{ marginBottom: 30 }}>
         <span className="nb-tab" style={{ background: GRAY }}><span>📚</span>Vocabulary</span>
         <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: LIGHT, borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+            <div>
+              <p style={{ fontWeight: 700, fontSize: 13, color: TEXT, margin: 0 }}>✏️ Fill in the Blank exercise</p>
+              <p style={{ fontSize: 12, color: MUTED, margin: '2px 0 0' }}>Only shown to this student when turned on.</p>
+            </div>
+            <button onClick={toggleFillBlank} style={{
+              padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: fillBlankEnabled ? OLIVE : 'rgba(0,0,0,0.12)', color: fillBlankEnabled ? 'white' : MUTED,
+              fontSize: 12, fontWeight: 700,
+            }}>{fillBlankEnabled ? 'On' : 'Off'}</button>
+          </div>
           <NewVocabForm studentId={student.id} onCreated={fetchAll} />
           {vocabulary.length === 0 ? (
             <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No words assigned yet.</p>
@@ -281,6 +299,7 @@ function StudentEditor({ student, onBack }) {
                   <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{sv.vocabulary?.word}</p>
                   <p style={{ fontSize: 12, color: MUTED, margin: '5px 0 0', lineHeight: 1.4 }}>{sv.vocabulary?.definition}</p>
                   {sv.vocabulary?.example && <p style={{ fontSize: 12, color: MUTED, fontStyle: 'italic', margin: '5px 0 0' }}>"{sv.vocabulary.example}"</p>}
+                  {sv.vocabulary?.cloze_sentence && <p style={{ fontSize: 12, color: MUTED, margin: '5px 0 0', lineHeight: 1.4 }}>✏️ {sv.vocabulary.cloze_sentence}</p>}
                   <button onClick={() => removeVocab(sv.id, sv.vocabulary_id)} style={{ ...smallBtn, marginTop: 10, color: DANGER }}>Remove</button>
                 </div>
               ))}
@@ -373,15 +392,16 @@ function NewLessonForm({ studentId, onCreated }) {
 /* ── New vocabulary word form ── */
 function NewVocabForm({ studentId, onCreated }) {
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ word: '', definition: '', example: '' })
+  const [form, setForm] = useState({ word: '', definition: '', example: '', clozeSentence: '' })
 
   async function create() {
     if (!form.word.trim() || !form.definition.trim()) return
     const { data: v } = await supabase.from('vocabulary').insert({
       word: form.word.trim(), definition: form.definition.trim(), example: form.example.trim() || null,
+      cloze_sentence: form.clozeSentence.trim() || null,
     }).select().single()
     if (v) await supabase.from('student_vocabulary').insert({ student_id: studentId, vocabulary_id: v.id, status: 'learning' })
-    setForm({ word: '', definition: '', example: '' })
+    setForm({ word: '', definition: '', example: '', clozeSentence: '' })
     setOpen(false)
     onCreated()
   }
@@ -393,6 +413,7 @@ function NewVocabForm({ studentId, onCreated }) {
       <Field label="Word" value={form.word} onChange={v => setForm(f => ({ ...f, word: v }))} placeholder="e.g. ambitious" />
       <Field label="Definition" value={form.definition} onChange={v => setForm(f => ({ ...f, definition: v }))} placeholder="e.g. Having a strong desire to succeed" />
       <Field label="Example sentence (optional)" value={form.example} onChange={v => setForm(f => ({ ...f, example: v }))} placeholder="e.g. She is an ambitious student." />
+      <Field label="Fill-in-the-blank sentence (optional)" value={form.clozeSentence} onChange={v => setForm(f => ({ ...f, clozeSentence: v }))} placeholder="e.g. He {blank} every day." />
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={create} style={addBtn}>Save</button>
         <button onClick={() => setOpen(false)} style={cancelBtn}>Cancel</button>
