@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { nextReview } from '../lib/sm2'
 import './notebook.css'
 import Flashcards from './vocabulary/Flashcards'
 import Quiz from './vocabulary/Quiz'
@@ -22,10 +23,13 @@ const MODES = [
   { key: 'blast', name: 'Blast', icon: '🚀', desc: 'Blast the asteroid before time runs out.' },
 ]
 
+const todayString = () => new Date().toISOString().slice(0, 10)
+
 export default function Vocabulary() {
   const { profile, signOut } = useAuth()
   const [words, setWords] = useState([])
   const [mode, setMode] = useState(null)
+  const [interstitialMode, setInterstitialMode] = useState(null)
 
   const fetchWords = useCallback(async () => {
     const { data } = await supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', profile.id)
@@ -37,10 +41,31 @@ export default function Vocabulary() {
     fetchWords()
   }, [profile, fetchWords])
 
-  async function markStatus(vocabularyId, status) {
+  const today = todayString()
+  const dueWords = words.filter(w => w.next_review_date <= today)
+  const laterWords = words.filter(w => w.next_review_date > today)
+  const sessionWords = dueWords.length > 0 ? dueWords : laterWords
+  const sessionReserve = dueWords.length > 0 ? laterWords : []
+
+  async function reviewWord(vocabularyId, quality) {
     const row = words.find(w => w.vocabulary_id === vocabularyId)
     if (!row) return
-    await supabase.from('student_vocabulary').update({ status }).eq('id', row.id)
+    const update = nextReview(
+      { repetitions: row.repetitions, easeFactor: row.ease_factor, intervalDays: row.interval_days },
+      quality
+    )
+    await supabase.from('student_vocabulary').update({
+      repetitions: update.repetitions,
+      ease_factor: update.easeFactor,
+      interval_days: update.intervalDays,
+      next_review_date: update.nextReviewDate,
+      last_reviewed_at: new Date().toISOString(),
+    }).eq('id', row.id)
+  }
+
+  function chooseMode(key) {
+    if (dueWords.length > 0 || laterWords.length === 0) setMode(key)
+    else setInterstitialMode(key)
   }
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Student'
@@ -78,7 +103,27 @@ export default function Vocabulary() {
             <div className="nb-margin-line" />
 
             {mode ? (
-              <ModeRunner mode={mode} words={words} firstName={firstName} onExit={() => { setMode(null); fetchWords() }} onStatus={markStatus} />
+              <ModeRunner
+                mode={mode}
+                words={sessionWords}
+                reserveWords={sessionReserve}
+                firstName={firstName}
+                onExit={() => { setMode(null); fetchWords() }}
+                onReview={reviewWord}
+              />
+            ) : interstitialMode ? (
+              <section>
+                <span className="nb-tab" style={{ background: OLIVE }}><span>📚</span>Choose a mode</span>
+                <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)', textAlign: 'center' }}>
+                  <p style={{ fontSize: 14, color: TEXT, margin: '0 0 18px' }}>
+                    No words due for review today. Study {laterWords.length} more word{laterWords.length === 1 ? '' : 's'} anyway?
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                    <button onClick={() => setInterstitialMode(null)} style={{ padding: '12px 22px', borderRadius: 12, border: '1.5px solid rgba(0,0,0,0.15)', background: 'transparent', color: MUTED, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Not now</button>
+                    <button onClick={() => { setMode(interstitialMode); setInterstitialMode(null) }} style={{ padding: '12px 22px', borderRadius: 12, border: 'none', background: OLIVE, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Continue studying</button>
+                  </div>
+                </div>
+              </section>
             ) : (
               <section>
                 <span className="nb-tab" style={{ background: OLIVE }}><span>📚</span>Choose a mode</span>
@@ -87,10 +132,13 @@ export default function Vocabulary() {
                     <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Aimee hasn't assigned any words yet — check back soon!</p>
                   ) : (
                     <>
-                      <p className="nb-mono" style={{ fontSize: 12, color: MUTED, margin: '0 0 16px' }}>{words.length} word{words.length === 1 ? '' : 's'} to study</p>
+                      <p className="nb-mono" style={{ fontSize: 12, color: MUTED, margin: '0 0 16px' }}>
+                        {dueWords.length} word{dueWords.length === 1 ? '' : 's'} due today
+                        {laterWords.length > 0 && ` · ${laterWords.length} more available`}
+                      </p>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
                         {MODES.map(m => (
-                          <div key={m.key} onClick={() => setMode(m.key)} className="nb-shelf-card" style={{
+                          <div key={m.key} onClick={() => chooseMode(m.key)} className="nb-shelf-card" style={{
                             background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)',
                             borderRadius: 14, padding: '22px 16px', textAlign: 'center',
                           }}>
@@ -112,8 +160,8 @@ export default function Vocabulary() {
   )
 }
 
-function ModeRunner({ mode, words, onExit, onStatus }) {
-  const props = { words, onExit, onStatus }
+function ModeRunner({ mode, words, reserveWords, onExit, onReview }) {
+  const props = { words, reserveWords, onExit, onReview }
   if (mode === 'flashcards') return <Flashcards {...props} />
   if (mode === 'quiz') return <Quiz {...props} />
   if (mode === 'matching') return <Matching {...props} />

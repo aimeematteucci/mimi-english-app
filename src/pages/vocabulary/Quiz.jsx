@@ -36,8 +36,9 @@ function buildQuestions(words) {
   })
 }
 
-export default function Quiz({ words, onExit, onStatus }) {
-  const [questions] = useState(() => buildQuestions(words))
+export default function Quiz({ words, reserveWords = [], onExit, onReview }) {
+  const [questions, setQuestions] = useState(() => buildQuestions(words))
+  const [extra, setExtra] = useState(reserveWords)
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState(null)
   const [score, setScore] = useState(0)
@@ -50,7 +51,7 @@ export default function Quiz({ words, onExit, onStatus }) {
     setSelected(option)
     const correct = option === q.vocab.definition
     if (correct) setScore(s => s + 1)
-    onStatus(q.vocab.id, correct ? 'mastered' : 'learning')
+    onReview(q.vocab.id, correct ? 4 : 1)
   }
 
   function next() {
@@ -63,13 +64,33 @@ export default function Quiz({ words, onExit, onStatus }) {
   }
 
   function restart() {
+    setQuestions(buildQuestions(words))
     setIndex(0)
     setSelected(null)
     setScore(0)
     setDone(false)
   }
 
+  function continueWithMore() {
+    setQuestions(qs => [...qs, ...buildQuestions(extra)])
+    setExtra([])
+    setIndex(i => i + 1)
+    setSelected(null)
+    setDone(false)
+  }
+
   if (done) {
+    if (extra.length > 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: 40, margin: '0 0 12px' }}>🏆</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>Score: {score} / {questions.length}</p>
+          <p style={{ fontSize: 14, color: MUTED, margin: '0 0 14px' }}>{extra.length} more word{extra.length === 1 ? '' : 's'} available.</p>
+          <button onClick={continueWithMore} style={{ ...btn(OLIVE), marginRight: 10 }}>Continue with {extra.length} more</button>
+          <button onClick={onExit} style={btn('transparent', MUTED)}>Back to modes</button>
+        </div>
+      )
+    }
     return (
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
         <p style={{ fontSize: 40, margin: '0 0 12px' }}>🏆</p>

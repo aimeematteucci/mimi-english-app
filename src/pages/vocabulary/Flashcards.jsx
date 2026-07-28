@@ -6,7 +6,9 @@ const MUTED = '#7a6a5a'
 const ACCENT = '#c17c4a'
 const OLIVE = '#8d9a55'
 const LIGHT = '#f8f5f2'
-const CARD_BG = '#ffffff'
+const CARD_BG = '#181d29'
+const CARD_TEXT = '#f7f2ea'
+const CARD_MUTED = 'rgba(247,242,234,0.62)'
 
 function shuffle(arr) {
   const a = [...arr]
@@ -17,16 +19,17 @@ function shuffle(arr) {
   return a
 }
 
-export default function Flashcards({ words, onExit, onStatus }) {
-  const [deck] = useState(() => shuffle(words))
+export default function Flashcards({ words, reserveWords = [], onExit, onReview }) {
+  const [deck, setDeck] = useState(() => shuffle(words))
+  const [extra, setExtra] = useState(reserveWords)
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [done, setDone] = useState(false)
 
   const current = deck[index]?.vocabulary
 
-  function next(status) {
-    if (status) onStatus(current.id, status)
+  function next(quality) {
+    if (quality) onReview(current.id, quality)
     if (index + 1 >= deck.length) {
       setDone(true)
     } else {
@@ -36,12 +39,31 @@ export default function Flashcards({ words, onExit, onStatus }) {
   }
 
   function restart() {
+    setDeck(shuffle(words))
     setIndex(0)
     setFlipped(false)
     setDone(false)
   }
 
+  function continueWithMore() {
+    setDeck(d => [...d, ...shuffle(extra)])
+    setExtra([])
+    setIndex(i => i + 1)
+    setFlipped(false)
+    setDone(false)
+  }
+
   if (done) {
+    if (extra.length > 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: 40, margin: '0 0 12px' }}>🎉</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: TEXT, margin: '0 0 20px' }}>Due words done! {extra.length} more word{extra.length === 1 ? '' : 's'} available.</p>
+          <button onClick={continueWithMore} style={{ ...btn(OLIVE), marginRight: 10 }}>Continue with {extra.length} more</button>
+          <button onClick={onExit} style={btn('transparent', MUTED)}>Back to modes</button>
+        </div>
+      )
+    }
     return (
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
         <p style={{ fontSize: 40, margin: '0 0 12px' }}>🎉</p>
@@ -62,28 +84,28 @@ export default function Flashcards({ words, onExit, onStatus }) {
       <div onClick={() => setFlipped(f => !f)} style={{
         background: CARD_BG, borderRadius: 20, padding: '50px 32px', minHeight: 220,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
-        boxShadow: '0 6px 22px rgba(0,0,0,0.1)', cursor: 'pointer', textAlign: 'center',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.35)', cursor: 'pointer', textAlign: 'center',
       }}>
         {flipped ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 30, fontWeight: 800, color: TEXT, margin: 0 }}>{current.word}</p>
-              <SpeakerButton word={current.word} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 40, fontWeight: 800, color: CARD_TEXT, margin: 0 }}>{current.word}</p>
+              <SpeakerButton word={current.word} style={{ background: 'rgba(255,255,255,0.14)' }} />
             </div>
-            {current.example && <p style={{ fontSize: 14, color: MUTED, fontStyle: 'italic', margin: 0 }}>"{current.example}"</p>}
+            {current.example && <p style={{ fontSize: 16, color: CARD_MUTED, fontStyle: 'italic', margin: 0 }}>"{current.example}"</p>}
           </>
         ) : (
           <>
-            <p style={{ fontSize: 18, color: TEXT, margin: 0, lineHeight: 1.5 }}>{current.definition}</p>
-            <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: 0 }}>tap to reveal</p>
+            <p style={{ fontSize: 24, color: CARD_TEXT, margin: 0, lineHeight: 1.5, fontWeight: 600 }}>{current.definition}</p>
+            <p className="nb-mono" style={{ fontSize: 12, color: CARD_MUTED, margin: 0 }}>tap to reveal</p>
           </>
         )}
       </div>
 
       {flipped && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'center' }}>
-          <button onClick={() => next('learning')} style={btn(LIGHT, TEXT)}>Still learning</button>
-          <button onClick={() => next('mastered')} style={btn(OLIVE)}>Got it! ✓</button>
+          <button onClick={() => next(2)} style={btn(LIGHT, TEXT)}>Still learning</button>
+          <button onClick={() => next(4)} style={btn(OLIVE)}>Got it! ✓</button>
         </div>
       )}
     </div>

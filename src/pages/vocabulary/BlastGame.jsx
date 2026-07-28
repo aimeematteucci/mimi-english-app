@@ -40,7 +40,9 @@ function makeWave(words) {
   return { target: target.vocabulary, asteroids }
 }
 
-export default function BlastGame({ words, onExit, onStatus }) {
+export default function BlastGame({ words, reserveWords = [], onExit, onReview }) {
+  const [pool, setPool] = useState(words)
+  const [extra, setExtra] = useState(reserveWords)
   const [wave, setWave] = useState(() => makeWave(words))
   const [lives, setLives] = useState(START_LIVES)
   const [score, setScore] = useState(0)
@@ -49,7 +51,7 @@ export default function BlastGame({ words, onExit, onStatus }) {
   const [hitFx, setHitFx] = useState(null)
   const [shots, setShots] = useState([])
 
-  const nextWave = useCallback(() => setWave(makeWave(words)), [words])
+  const nextWave = useCallback(() => setWave(makeWave(pool)), [pool])
 
   function fireShot(asteroid) {
     const id = uid++
@@ -73,7 +75,7 @@ export default function BlastGame({ words, onExit, onStatus }) {
     fireShot(asteroid)
     if (asteroid.isTarget) {
       setScore(s => s + 1)
-      onStatus(asteroid.vocabularyId, 'mastered')
+      onReview(asteroid.vocabularyId, 4)
       setHitFx(asteroid.uid)
       setTimeout(() => setHitFx(null), 300)
       setTimeout(nextWave, 200)
@@ -89,25 +91,25 @@ export default function BlastGame({ words, onExit, onStatus }) {
     const id = setInterval(() => {
       setWave(w => {
         const survivors = []
-        let missed = false
+        let missedTargetId = null
         for (const a of w.asteroids) {
           const top = a.top + a.speed
           if (top >= 100) {
-            if (a.isTarget) missed = true
+            if (a.isTarget) missedTargetId = a.vocabularyId
           } else {
             survivors.push({ ...a, top })
           }
         }
-        if (missed) setTimeout(loseLife, 0)
-        if (survivors.length === 0 || missed) {
-          setTimeout(nextWave, missed ? 150 : 0)
+        if (missedTargetId) setTimeout(() => { loseLife(); onReview(missedTargetId, 2) }, 0)
+        if (survivors.length === 0 || missedTargetId) {
+          setTimeout(nextWave, missedTargetId ? 150 : 0)
           return w
         }
         return { ...w, asteroids: survivors }
       })
     }, TICK_MS)
     return () => clearInterval(id)
-  }, [gameOver, nextWave])
+  }, [gameOver, nextWave, onReview])
 
   // countdown
   useEffect(() => {
@@ -122,7 +124,18 @@ export default function BlastGame({ words, onExit, onStatus }) {
   }, [gameOver])
 
   function restart() {
-    setWave(makeWave(words))
+    setWave(makeWave(pool))
+    setLives(START_LIVES)
+    setScore(0)
+    setTimeLeft(GAME_SECONDS)
+    setGameOver(false)
+  }
+
+  function continueWithMore() {
+    const newPool = [...pool, ...extra]
+    setPool(newPool)
+    setExtra([])
+    setWave(makeWave(newPool))
     setLives(START_LIVES)
     setScore(0)
     setTimeLeft(GAME_SECONDS)
@@ -130,6 +143,17 @@ export default function BlastGame({ words, onExit, onStatus }) {
   }
 
   if (gameOver) {
+    if (extra.length > 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: 40, margin: '0 0 12px' }}>🚀</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>Score: {score}</p>
+          <p style={{ fontSize: 14, color: MUTED, margin: '0 0 14px' }}>{extra.length} more word{extra.length === 1 ? '' : 's'} available.</p>
+          <button onClick={continueWithMore} style={{ ...btn(ACCENT), marginRight: 10, marginTop: 14 }}>Continue with more</button>
+          <button onClick={onExit} style={{ ...btn('transparent', MUTED), marginTop: 14 }}>Back to modes</button>
+        </div>
+      )
+    }
     return (
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
         <p style={{ fontSize: 40, margin: '0 0 12px' }}>🚀</p>

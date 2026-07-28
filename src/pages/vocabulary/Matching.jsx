@@ -26,8 +26,9 @@ function buildTiles(words) {
   return { round, tiles: shuffle(tiles) }
 }
 
-export default function Matching({ words, onExit, onStatus }) {
+export default function Matching({ words, reserveWords = [], onExit, onReview }) {
   const [round, setRound] = useState(() => buildTiles(words))
+  const [extra, setExtra] = useState(reserveWords)
   const [flipped, setFlipped] = useState([])
   const [matched, setMatched] = useState(new Set())
   const [moves, setMoves] = useState(0)
@@ -52,7 +53,7 @@ export default function Matching({ words, onExit, onStatus }) {
     setTimeout(() => {
       if (isMatch) {
         setMatched(prev => new Set(prev).add(tile.vocabularyId))
-        onStatus(tile.vocabularyId, 'mastered')
+        onReview(tile.vocabularyId, 4)
       }
       setFlipped([])
       setBusy(false)
@@ -67,7 +68,27 @@ export default function Matching({ words, onExit, onStatus }) {
     setBusy(false)
   }
 
+  function continueWithMore() {
+    setRound(buildTiles([...words, ...extra]))
+    setExtra([])
+    setFlipped([])
+    setMatched(new Set())
+    setMoves(0)
+    setBusy(false)
+  }
+
   if (done) {
+    if (extra.length > 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: 40, margin: '0 0 12px' }}>🧩</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: TEXT, margin: '0 0 6px' }}>All matched in {moves} moves!</p>
+          <p style={{ fontSize: 14, color: MUTED, margin: '0 0 14px' }}>{extra.length} more word{extra.length === 1 ? '' : 's'} available.</p>
+          <button onClick={continueWithMore} style={{ ...btn(OLIVE), marginRight: 10 }}>Continue with more</button>
+          <button onClick={onExit} style={btn('transparent', MUTED)}>Back to modes</button>
+        </div>
+      )
+    }
     return (
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
         <p style={{ fontSize: 40, margin: '0 0 12px' }}>🧩</p>
