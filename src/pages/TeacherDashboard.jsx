@@ -121,11 +121,11 @@ export default function TeacherDashboard() {
                     {students.length === 0 ? (
                       <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No students yet.</p>
                     ) : (
-                      <div className="nb-shelf">
+                      <div className="nb-student-grid">
                         {students.map(s => (
                           <div key={s.id} onClick={() => openStudent(s)} className="nb-shelf-card" style={{
                             background: LIGHT, border: '1.5px solid rgba(0,0,0,0.06)',
-                            borderRadius: 14, padding: '18px 16px',
+                            borderRadius: 14, padding: '18px 16px', flex: 'none',
                           }}>
                             {unread.has(s.id) && <span className="nb-unread-dot" />}
                             <div style={{
