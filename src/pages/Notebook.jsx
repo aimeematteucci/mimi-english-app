@@ -433,8 +433,12 @@ function SpeakingSection({ profile }) {
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
-        setPendingAudio({ blob, url: URL.createObjectURL(blob), name: `recording.${extFromMime(blob.type)}` })
         stream.getTracks().forEach(t => t.stop())
+        if (blob.size < 3000) {
+          setError('That recording was too short — hold record for a few seconds and speak before stopping.')
+          return
+        }
+        setPendingAudio({ blob, url: URL.createObjectURL(blob), name: `recording.${extFromMime(blob.type)}` })
       }
       mediaRecorderRef.current = mr
       mr.start()

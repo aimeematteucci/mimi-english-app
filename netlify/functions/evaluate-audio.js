@@ -96,6 +96,7 @@ export default async (req) => {
 
     return json({ ok: true })
   } catch (err) {
+    console.error(`evaluate-audio failed for submission ${submissionId}:`, err)
     await supabase
       .from('audio_submissions')
       .update({ status: 'error', error_message: String(err.message || err) })
