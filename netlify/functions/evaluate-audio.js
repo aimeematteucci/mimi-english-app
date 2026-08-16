@@ -136,19 +136,29 @@ async function generateFeedback(transcript, topic) {
     },
     body: JSON.stringify({
       model: FEEDBACK_MODEL,
-      max_tokens: 1800,
+      max_tokens: 3000,
       system: FEEDBACK_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     }),
   })
   if (!res.ok) throw new Error(`Claude feedback failed: ${res.status} ${await res.text()}`)
   const data = await res.json()
-  const text = data.content?.[0]?.text || ''
+  const textBlock = data.content?.find(b => b.type === 'text')
+  const text = textBlock?.text || ''
   const jsonStart = text.indexOf('{')
   const jsonEnd = text.lastIndexOf('}')
-  if (jsonStart === -1 || jsonEnd === -1) throw new Error('Claude did not return JSON')
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error(
+      `Claude did not return JSON (stop_reason=${data.stop_reason}, blocks=${(data.content || []).map(b => b.type).join(',')}, snippet="${text.slice(0, 300)}")`
+    )
+  }
 
-  const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+  let parsed
+  try {
+    parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+  } catch (e) {
+    throw new Error(`Claude JSON failed to parse: ${e.message} (snippet="${text.slice(0, 300)}")`)
+  }
   parsed.score = Math.max(0, Math.min(10, Number(parsed.score) || 0))
   return parsed
 }
