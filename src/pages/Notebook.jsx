@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -14,9 +14,12 @@ const OLIVE = '#8d9a55'
 const SLATE = '#6f8fa3'
 const PLUM = '#a56b7c'
 const GRAY = '#948a7d'
+const RUST = '#a8553f'
 
 const FILE_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.mp3,.m4a,.wav,.ogg'
 const MAX_FILE_MB = 20
+const MAX_RECORDING_SECONDS = 180
+const MAX_AUDIO_MB = 15
 
 export default function Notebook() {
   const { profile, signOut } = useAuth()
@@ -177,6 +180,9 @@ export default function Notebook() {
                 </Link>
               )}
             </Section>
+
+            {/* Speaking practice */}
+            <SpeakingSection profile={profile} />
 
             {/* Feedback + Files */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 8 }}>
@@ -362,6 +368,296 @@ function SuggestSection({ profile, suggestions, onSent }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ── Speaking practice ── */
+function extFromMime(mime) {
+  if (mime.includes('mp4')) return 'm4a'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('wav')) return 'wav'
+  return 'webm'
+}
+
+function formatTime(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function SpeakingSection({ profile }) {
+  const [submissions, setSubmissions] = useState([])
+  const [recording, setRecording] = useState(false)
+  const [seconds, setSeconds] = useState(0)
+  const [pendingAudio, setPendingAudio] = useState(null)
+  const [topic, setTopic] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const timerRef = useRef(null)
+
+  const fetchSubmissions = useCallback(async () => {
+    if (!profile) return
+    const { data } = await supabase
+      .from('audio_submissions')
+      .select('*')
+      .eq('student_id', profile.id)
+      .order('created_at', { ascending: false })
+    setSubmissions(data || [])
+  }, [profile])
+
+  useEffect(() => { fetchSubmissions() }, [fetchSubmissions])
+
+  useEffect(() => {
+    if (!submissions.some(s => s.status === 'processing')) return
+    const id = setInterval(fetchSubmissions, 4000)
+    return () => clearInterval(id)
+  }, [submissions, fetchSubmissions])
+
+  useEffect(() => () => clearInterval(timerRef.current), [])
+
+  function stopRecording() {
+    clearInterval(timerRef.current)
+    mediaRecorderRef.current?.stop()
+    setRecording(false)
+  }
+
+  async function startRecording() {
+    setError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      chunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' })
+        setPendingAudio({ blob, url: URL.createObjectURL(blob), name: `recording.${extFromMime(blob.type)}` })
+        stream.getTracks().forEach(t => t.stop())
+      }
+      mediaRecorderRef.current = mr
+      mr.start()
+      setRecording(true)
+      setSeconds(0)
+      timerRef.current = setInterval(() => {
+        setSeconds(s => {
+          if (s + 1 >= MAX_RECORDING_SECONDS) {
+            clearInterval(timerRef.current)
+            mediaRecorderRef.current?.stop()
+            setRecording(false)
+            return MAX_RECORDING_SECONDS
+          }
+          return s + 1
+        })
+      }, 1000)
+    } catch {
+      setError('Could not access your microphone — check your browser permissions.')
+    }
+  }
+
+  function handleFileChoice(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError('')
+    if (file.size > MAX_AUDIO_MB * 1024 * 1024) {
+      setError(`File too big — max ${MAX_AUDIO_MB}MB.`)
+      return
+    }
+    setPendingAudio({ blob: file, url: URL.createObjectURL(file), name: file.name })
+  }
+
+  function discardPending() {
+    if (pendingAudio) URL.revokeObjectURL(pendingAudio.url)
+    setPendingAudio(null)
+    setTopic('')
+  }
+
+  async function send() {
+    if (!pendingAudio) return
+    setSending(true)
+    setError('')
+    try {
+      const path = `${profile.id}/${Date.now()}-${pendingAudio.name}`
+      const { error: uploadError } = await supabase.storage.from('speaking-audio').upload(path, pendingAudio.blob)
+      if (uploadError) throw uploadError
+
+      const { data: row, error: insertError } = await supabase
+        .from('audio_submissions')
+        .insert({ student_id: profile.id, storage_path: path, topic: topic.trim() || null })
+        .select()
+        .single()
+      if (insertError) throw insertError
+
+      discardPending()
+      fetchSubmissions()
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      fetch('/.netlify/functions/evaluate-audio', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ submissionId: row.id, accessToken: sessionData.session.access_token }),
+      }).finally(fetchSubmissions)
+    } catch {
+      setError('Could not send audio. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function removeSubmission(s) {
+    await supabase.storage.from('speaking-audio').remove([s.storage_path])
+    await supabase.from('audio_submissions').delete().eq('id', s.id)
+    fetchSubmissions()
+  }
+
+  return (
+    <div style={{ marginBottom: 30 }}>
+      <span className="nb-tab" style={{ background: RUST }}><span>🎙️</span>Speaking practice</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        <p style={{ fontSize: 13, color: MUTED, marginBottom: 14 }}>
+          Record yourself speaking English (up to {MAX_RECORDING_SECONDS / 60} min) or upload a file — an AI gives you a first score and feedback right away, then Aimee reviews it.
+        </p>
+
+        {!pendingAudio ? (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+            <button onClick={recording ? stopRecording : startRecording} style={{
+              padding: '12px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: recording ? '#d94f4f' : RUST, color: 'white', fontSize: 14, fontWeight: 700,
+            }}>
+              {recording ? `⏹ Stop (${formatTime(seconds)})` : '🎤 Record'}
+            </button>
+            <label className="nb-dropzone" style={{
+              display: 'flex', alignItems: 'center', padding: '12px 20px', borderRadius: 12,
+              border: '1.5px dashed rgba(0,0,0,0.2)', cursor: recording ? 'default' : 'pointer',
+              fontSize: 13, fontWeight: 700, color: recording ? MUTED : RUST,
+            }}>
+              📎 Upload audio file
+              <input type="file" accept="audio/*" onChange={handleFileChoice} disabled={recording} style={{ display: 'none' }} />
+            </label>
+          </div>
+        ) : (
+          <div style={{ background: LIGHT, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio controls src={pendingAudio.url} style={{ width: '100%', marginBottom: 10 }} />
+            <input
+              value={topic} onChange={e => setTopic(e.target.value)}
+              placeholder="What are you talking about? (optional)"
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.1)', marginBottom: 10, boxSizing: 'border-box', color: TEXT }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={send} disabled={sending} style={{
+                padding: '11px 18px', borderRadius: 10, border: 'none', cursor: sending ? 'default' : 'pointer',
+                background: RUST, color: 'white', fontSize: 13, fontWeight: 700, opacity: sending ? 0.7 : 1,
+              }}>{sending ? 'Sending…' : '✈ Send for feedback'}</button>
+              <button onClick={discardPending} disabled={sending} style={{
+                padding: '11px 18px', borderRadius: 10, cursor: 'pointer',
+                background: 'transparent', border: '1.5px solid rgba(0,0,0,0.15)', color: MUTED, fontSize: 13, fontWeight: 600,
+              }}>Discard</button>
+            </div>
+          </div>
+        )}
+
+        {error && <p style={{ fontSize: 12, color: '#d94f4f', margin: '0 0 12px' }}>{error}</p>}
+
+        {submissions.length === 0 ? (
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No recordings yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {submissions.map(s => <SubmissionCard key={s.id} s={s} onRemove={() => removeSubmission(s)} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SubmissionCard({ s, onRemove }) {
+  const [open, setOpen] = useState(false)
+  const isFinal = s.reviewed_by_teacher
+  const score = isFinal ? s.teacher_score : s.ai_score
+  const badgeLabel = isFinal ? '✓ Feedback by Aimee' : '🤖 Feedback by AI · awaiting review'
+  const badgeColor = isFinal ? OLIVE : SLATE
+
+  return (
+    <div style={{ background: LIGHT, borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: 0 }}>{new Date(s.created_at).toLocaleDateString()}</p>
+          {s.topic && <p style={{ fontSize: 13, fontWeight: 700, color: TEXT, margin: '3px 0 0' }}>{s.topic}</p>}
+        </div>
+        {s.status === 'done' && score != null && (
+          <span style={{ background: badgeColor, color: 'white', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {Number(score).toFixed(1)} / 10
+          </span>
+        )}
+      </div>
+
+      {s.status === 'processing' && <p style={{ fontSize: 13, color: MUTED, margin: '10px 0 0' }}>⏳ Processing your audio…</p>}
+
+      {s.status === 'error' && (
+        <p style={{ fontSize: 13, color: '#d94f4f', margin: '10px 0 0' }}>Something went wrong evaluating this audio — try recording it again.</p>
+      )}
+
+      {s.status === 'done' && (
+        <div style={{ marginTop: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: badgeColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{badgeLabel}</span>
+          <button onClick={() => setOpen(o => !o)} style={{
+            display: 'block', marginTop: 6, background: 'none', border: 'none', color: ACCENT,
+            fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0,
+          }}>
+            {open ? 'Hide feedback ▲' : 'Show feedback ▼'}
+          </button>
+          {open && (isFinal
+            ? <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, marginTop: 10, whiteSpace: 'pre-wrap' }}>{s.teacher_feedback}</p>
+            : <AIFeedbackDetail feedback={s.ai_feedback} />)}
+        </div>
+      )}
+
+      {s.status !== 'processing' && (
+        <button onClick={onRemove} style={{ marginTop: 10, background: 'none', border: 'none', color: MUTED, fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>
+      )}
+    </div>
+  )
+}
+
+function AIFeedbackDetail({ feedback }) {
+  if (!feedback) return null
+  return (
+    <div style={{ marginTop: 10, fontSize: 13, color: TEXT, lineHeight: 1.6 }}>
+      {feedback.reconstructed_intent && (
+        <p style={{ margin: '0 0 10px' }}><strong>What you were trying to say:</strong> {feedback.reconstructed_intent}</p>
+      )}
+      {feedback.strengths?.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>✅ What went well</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{feedback.strengths.map((t, i) => <li key={i}>{t}</li>)}</ul>
+        </div>
+      )}
+      {feedback.errors?.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>Corrections</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {feedback.errors.map((e, i) => <li key={i}>"{e.said}" → "{e.correct}" — {e.tip}</li>)}
+          </ul>
+        </div>
+      )}
+      {feedback.portuguese_gaps?.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>🇧🇷 Words you switched to Portuguese for</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {feedback.portuguese_gaps.map((g, i) => <li key={i}>{g.pt} → <em>{g.en}</em> — "{g.example}"</li>)}
+          </ul>
+        </div>
+      )}
+      {feedback.study_tips?.length > 0 && (
+        <div>
+          <strong>📚 Study tips</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{feedback.study_tips.map((t, i) => <li key={i}>{t}</li>)}</ul>
+        </div>
+      )}
+      {feedback.score_reason && <p style={{ marginTop: 10, fontStyle: 'italic', color: MUTED }}>{feedback.score_reason}</p>}
     </div>
   )
 }
