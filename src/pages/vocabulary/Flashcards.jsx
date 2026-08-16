@@ -90,7 +90,7 @@ export default function Flashcards({ words, reserveWords = [], onExit, onReview 
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 40, fontWeight: 800, color: CARD_TEXT, margin: 0 }}>{current.word}</p>
-              <SpeakerButton word={current.word} style={{ background: 'rgba(255,255,255,0.14)' }} />
+              <SpeakerButton word={current.word} lang={current.lang} style={{ background: 'rgba(255,255,255,0.14)' }} />
             </div>
             {current.example && <p style={{ fontSize: 16, color: CARD_MUTED, fontStyle: 'italic', margin: 0 }}>"{current.example}"</p>}
           </>

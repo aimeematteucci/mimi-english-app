@@ -14,23 +14,26 @@ const SLATE = '#6f8fa3'
 const PLUM = '#a56b7c'
 const GRAY = '#948a7d'
 const DANGER = '#d94f4f'
+const RUST = '#a8553f'
 
 export default function TeacherDashboard() {
   const { profile, signOut } = useAuth()
   const [students, setStudents] = useState([])
   const [unread, setUnread] = useState(new Set())
   const [selected, setSelected] = useState(null)
+  const [pendingReviews, setPendingReviews] = useState([])
 
   const fetchStudents = useCallback(async () => {
-    const [{ data: st }, { data: files }, { data: suggestions }] = await Promise.all([
+    const [{ data: st }, { data: files }, { data: suggestions }, { data: audio }] = await Promise.all([
       supabase.from('profiles').select('*').eq('role', 'student').order('full_name'),
       supabase.from('student_files').select('student_id, uploaded_at'),
       supabase.from('feedback').select('student_id, created_at').eq('type', 'suggestion'),
+      supabase.from('audio_submissions').select('student_id, created_at'),
     ])
     setStudents(st || [])
 
     const latest = {}
-    for (const r of [...(files || []), ...(suggestions || [])]) {
+    for (const r of [...(files || []), ...(suggestions || []), ...(audio || [])]) {
       const ts = r.uploaded_at || r.created_at
       if (!latest[r.student_id] || ts > latest[r.student_id]) latest[r.student_id] = ts
     }
@@ -45,7 +48,18 @@ export default function TeacherDashboard() {
     setUnread(dots)
   }, [])
 
+  const fetchPendingReviews = useCallback(async () => {
+    const { data } = await supabase
+      .from('audio_submissions')
+      .select('*, profiles(full_name, email)')
+      .eq('status', 'done')
+      .eq('reviewed_by_teacher', false)
+      .order('created_at', { ascending: true })
+    setPendingReviews(data || [])
+  }, [])
+
   useEffect(() => { fetchStudents() }, [fetchStudents])
+  useEffect(() => { fetchPendingReviews() }, [fetchPendingReviews])
 
   function openStudent(s) {
     localStorage.setItem(`teacher_read_${s.id}`, new Date().toISOString())
@@ -113,10 +127,12 @@ export default function TeacherDashboard() {
             <div className="nb-margin-line" />
 
             {selected
-              ? <StudentEditor student={selected} onBack={() => { setSelected(null); fetchStudents() }} />
+              ? <StudentEditor student={selected} onBack={() => { setSelected(null); fetchStudents(); fetchPendingReviews() }} />
               : (
-                <section>
-                  <span className="nb-tab" style={{ background: OLIVE }}><span>🎓</span>Students</span>
+                <>
+                  <AudioReviewSection items={pendingReviews} onUpdate={() => { fetchPendingReviews(); fetchStudents() }} />
+                  <section>
+                    <span className="nb-tab" style={{ background: OLIVE }}><span>🎓</span>Students</span>
                   <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
                     {students.length === 0 ? (
                       <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No students yet.</p>
@@ -140,7 +156,8 @@ export default function TeacherDashboard() {
                       </div>
                     )}
                   </div>
-                </section>
+                  </section>
+                </>
               )}
           </main>
         </div>
@@ -156,6 +173,7 @@ function StudentEditor({ student, onBack }) {
   const [suggestions, setSuggestions] = useState([])
   const [files, setFiles] = useState([])
   const [vocabulary, setVocabulary] = useState([])
+  const [audioSubmissions, setAudioSubmissions] = useState([])
   const [joinLink, setJoinLink] = useState(student.join_link || '')
   const [savingLink, setSavingLink] = useState(false)
   const [linkSaved, setLinkSaved] = useState(false)
@@ -163,11 +181,12 @@ function StudentEditor({ student, onBack }) {
 
   const fetchAll = useCallback(async () => {
     const sid = student.id
-    const [{ data: sl }, { data: fb }, { data: sf }, { data: sv }] = await Promise.all([
+    const [{ data: sl }, { data: fb }, { data: sf }, { data: sv }, { data: aud }] = await Promise.all([
       supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
       supabase.from('student_vocabulary').select('*, vocabulary(*)').eq('student_id', sid),
+      supabase.from('audio_submissions').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
     ])
     setLessons(sl || [])
     const allFb = fb || []
@@ -175,6 +194,7 @@ function StudentEditor({ student, onBack }) {
     setSuggestions(allFb.filter(f => f.type === 'suggestion'))
     setFiles(sf || [])
     setVocabulary(sv || [])
+    setAudioSubmissions(aud || [])
   }, [student.id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
@@ -308,6 +328,35 @@ function StudentEditor({ student, onBack }) {
         </div>
       </section>
 
+      {/* Speaking practice history */}
+      <section style={{ marginBottom: 30 }}>
+        <span className="nb-tab" style={{ background: RUST }}><span>🎙️</span>Speaking practice</span>
+        <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+          {audioSubmissions.length === 0 ? (
+            <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No recordings sent yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {audioSubmissions.map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: LIGHT, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: TEXT, margin: 0 }}>{s.topic || 'Untitled recording'}</p>
+                    <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>{new Date(s.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0,
+                    color: 'white',
+                    background: s.status === 'processing' ? GRAY : s.status === 'error' ? DANGER : s.reviewed_by_teacher ? OLIVE : SLATE,
+                  }}>
+                    {s.status === 'processing' ? 'Processing' : s.status === 'error' ? 'Error' :
+                      s.reviewed_by_teacher ? `✓ ${Number(s.teacher_score).toFixed(1)}/10` : `AI ${Number(s.ai_score).toFixed(1)}/10 · pending`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Feedback */}
       <section style={{ marginBottom: 30 }}>
         <FeedbackEditor studentId={student.id} feedback={feedback} onUpdate={fetchAll} />
@@ -392,16 +441,16 @@ function NewLessonForm({ studentId, onCreated }) {
 /* ── New vocabulary word form ── */
 function NewVocabForm({ studentId, onCreated }) {
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ word: '', definition: '', example: '', clozeSentence: '' })
+  const [form, setForm] = useState({ word: '', definition: '', example: '', clozeSentence: '', lang: 'en-US' })
 
   async function create() {
     if (!form.word.trim() || !form.definition.trim()) return
     const { data: v } = await supabase.from('vocabulary').insert({
       word: form.word.trim(), definition: form.definition.trim(), example: form.example.trim() || null,
-      cloze_sentence: form.clozeSentence.trim() || null,
+      cloze_sentence: form.clozeSentence.trim() || null, lang: form.lang,
     }).select().single()
     if (v) await supabase.from('student_vocabulary').insert({ student_id: studentId, vocabulary_id: v.id, status: 'learning' })
-    setForm({ word: '', definition: '', example: '', clozeSentence: '' })
+    setForm({ word: '', definition: '', example: '', clozeSentence: '', lang: 'en-US' })
     setOpen(false)
     onCreated()
   }
@@ -410,6 +459,14 @@ function NewVocabForm({ studentId, onCreated }) {
 
   return (
     <div style={{ background: LIGHT, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5 }}>Word language (for pronunciation)</label>
+        <select value={form.lang} onChange={e => setForm(f => ({ ...f, lang: e.target.value }))}
+          style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 13, color: TEXT, background: 'white', boxSizing: 'border-box' }}>
+          <option value="en-US">English</option>
+          <option value="pt-BR">Portuguese</option>
+        </select>
+      </div>
       <Field label="Word" value={form.word} onChange={v => setForm(f => ({ ...f, word: v }))} placeholder="e.g. ambitious" />
       <Field label="Definition" value={form.definition} onChange={v => setForm(f => ({ ...f, definition: v }))} placeholder="e.g. Having a strong desire to succeed" />
       <Field label="Example sentence (optional)" value={form.example} onChange={v => setForm(f => ({ ...f, example: v }))} placeholder="e.g. She is an ambitious student." />
@@ -502,3 +559,94 @@ function Field({ label, value, onChange, placeholder }) {
 const addBtn = { padding: '9px 18px', borderRadius: 10, border: 'none', background: ACCENT, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 const cancelBtn = { padding: '9px 18px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', background: 'transparent', color: MUTED, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 const smallBtn = { padding: '5px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.12)', background: 'transparent', color: MUTED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }
+
+/* ── Speaking practice review queue ── */
+function AudioReviewSection({ items, onUpdate }) {
+  return (
+    <section style={{ marginBottom: 30 }}>
+      <span className="nb-tab" style={{ background: RUST }}><span>🎙️</span>Speaking practice review{items.length > 0 ? ` (${items.length})` : ''}</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        {items.length === 0 ? (
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No recordings waiting for review.</p>
+        ) : (
+          items.map(s => <AudioReviewItem key={s.id} s={s} onApproved={onUpdate} />)
+        )}
+      </div>
+    </section>
+  )
+}
+
+function AudioReviewItem({ s, onApproved }) {
+  const [score, setScore] = useState(s.ai_score ?? '')
+  const [text, setText] = useState(() => flattenFeedback(s.ai_feedback))
+  const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  async function approve() {
+    setSaving(true)
+    await supabase.from('audio_submissions').update({
+      reviewed_by_teacher: true,
+      teacher_score: score === '' ? s.ai_score : Number(score),
+      teacher_feedback: text,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', s.id)
+    setSaving(false)
+    onApproved()
+  }
+
+  async function listen() {
+    const { data } = await supabase.storage.from('speaking-audio').createSignedUrl(s.storage_path, 60)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  return (
+    <div style={{ background: LIGHT, borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{s.profiles?.full_name || s.profiles?.email}</p>
+          <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>
+            {new Date(s.created_at).toLocaleDateString()}{s.topic ? ` · ${s.topic}` : ''}{s.ai_feedback?.estimated_level ? ` · AI estimate: ${s.ai_feedback.estimated_level}` : ''}
+          </p>
+        </div>
+        <button onClick={listen} style={{ ...smallBtn, flexShrink: 0 }}>▶ Listen</button>
+      </div>
+
+      <button onClick={() => setExpanded(e => !e)} style={{ ...smallBtn, marginBottom: 10 }}>
+        {expanded ? 'Hide transcript ▲' : 'Show transcript ▼'}
+      </button>
+      {expanded && (
+        <div style={{ background: 'white', borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 12.5, color: TEXT, lineHeight: 1.6 }}>
+          {s.transcript || '—'}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Feedback (AI draft — edit before approving)</label>
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={7}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 13, border: '1.5px solid rgba(0,0,0,0.15)', color: TEXT, resize: 'vertical', boxSizing: 'border-box' }} />
+        </div>
+        <div style={{ width: 100 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Score</label>
+          <input type="number" min="0" max="10" step="0.5" value={score} onChange={e => setScore(e.target.value)}
+            style={{ width: '100%', padding: '9px 10px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', fontSize: 13, color: TEXT, boxSizing: 'border-box' }} />
+        </div>
+      </div>
+      <button onClick={approve} disabled={saving} style={{ ...addBtn, marginTop: 10, background: RUST, opacity: saving ? 0.7 : 1 }}>
+        {saving ? 'Approving…' : '✓ Approve & send to student'}
+      </button>
+    </div>
+  )
+}
+
+function flattenFeedback(f) {
+  if (!f) return ''
+  const lines = []
+  if (f.reconstructed_intent) lines.push(`What you were trying to say: ${f.reconstructed_intent}`, '')
+  if (f.strengths?.length) lines.push('What went well:', ...f.strengths.map(x => `- ${x}`), '')
+  if (f.errors?.length) lines.push('Corrections:', ...f.errors.map(e => `- "${e.said}" → "${e.correct}" — ${e.tip}`), '')
+  if (f.portuguese_gaps?.length) lines.push('Words you switched to Portuguese for:', ...f.portuguese_gaps.map(g => `- ${g.pt} → ${g.en} — "${g.example}"`), '')
+  if (f.communication_strategy) lines.push(`Communication strategy: ${f.communication_strategy}`, '')
+  if (f.study_tips?.length) lines.push('Study tips:', ...f.study_tips.map(t => `- ${t}`))
+  return lines.join('\n')
+}

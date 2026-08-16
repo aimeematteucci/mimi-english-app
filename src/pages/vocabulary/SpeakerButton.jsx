@@ -1,9 +1,9 @@
 import { speak } from './speak'
 
-export default function SpeakerButton({ word, style }) {
+export default function SpeakerButton({ word, lang, style }) {
   return (
     <button
-      onClick={e => { e.stopPropagation(); speak(word) }}
+      onClick={e => { e.stopPropagation(); speak(word, lang) }}
       aria-label={`Listen to "${word}"`}
       style={{
         border: 'none', background: 'rgba(0,0,0,0.06)', borderRadius: '50%',

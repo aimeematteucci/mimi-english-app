@@ -111,7 +111,7 @@ export default function Quiz({ words, reserveWords = [], onExit, onReview }) {
       <div style={{ background: CARD_BG, borderRadius: 20, padding: '32px', boxShadow: '0 6px 22px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 24 }}>
           <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 800, color: TEXT, margin: 0, textAlign: 'center' }}>{q.vocab.word}</p>
-          <SpeakerButton word={q.vocab.word} />
+          <SpeakerButton word={q.vocab.word} lang={q.vocab.lang} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

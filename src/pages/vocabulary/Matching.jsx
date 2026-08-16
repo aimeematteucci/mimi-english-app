@@ -20,7 +20,7 @@ function shuffle(arr) {
 function buildTiles(words) {
   const round = shuffle(words).slice(0, 6)
   const tiles = round.flatMap(w => ([
-    { id: `${w.vocabulary.id}-word`, vocabularyId: w.vocabulary.id, type: 'word', text: w.vocabulary.word },
+    { id: `${w.vocabulary.id}-word`, vocabularyId: w.vocabulary.id, type: 'word', text: w.vocabulary.word, lang: w.vocabulary.lang },
     { id: `${w.vocabulary.id}-def`, vocabularyId: w.vocabulary.id, type: 'def', text: w.vocabulary.definition },
   ]))
   return { round, tiles: shuffle(tiles) }
@@ -123,7 +123,7 @@ export default function Matching({ words, reserveWords = [], onExit, onReview })
                 tile.type === 'word' ? (
                   <>
                     <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{tile.text}</p>
-                    <SpeakerButton word={tile.text} style={{ width: 24, height: 24, fontSize: 12 }} />
+                    <SpeakerButton word={tile.text} lang={tile.lang} style={{ width: 24, height: 24, fontSize: 12 }} />
                   </>
                 ) : (
                   <p style={{ fontSize: 12, color: TEXT, margin: 0, lineHeight: 1.35 }}>{tile.text}</p>
