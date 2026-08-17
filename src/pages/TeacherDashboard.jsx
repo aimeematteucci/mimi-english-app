@@ -583,6 +583,8 @@ function AudioReviewItem({ s, onApproved }) {
   const [expanded, setExpanded] = useState(false)
   const [audioUrl, setAudioUrl] = useState(null)
   const [loadingAudio, setLoadingAudio] = useState(false)
+  const [downloadUrl, setDownloadUrl] = useState(null)
+  const [loadingDownload, setLoadingDownload] = useState(false)
 
   async function approve() {
     setSaving(true)
@@ -603,6 +605,16 @@ function AudioReviewItem({ s, onApproved }) {
     if (data?.signedUrl) setAudioUrl(data.signedUrl)
   }
 
+  async function prepareDownload() {
+    setLoadingDownload(true)
+    const filename = s.storage_path.split('/').pop() || 'recording.webm'
+    // The `download` option makes Supabase send Content-Disposition: attachment,
+    // so the link below forces a save even though the file lives on another origin.
+    const { data } = await supabase.storage.from('speaking-audio').createSignedUrl(s.storage_path, 300, { download: filename })
+    setLoadingDownload(false)
+    if (data?.signedUrl) setDownloadUrl(data.signedUrl)
+  }
+
   return (
     <div style={{ background: LIGHT, borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
@@ -612,7 +624,12 @@ function AudioReviewItem({ s, onApproved }) {
             {new Date(s.created_at).toLocaleDateString()}{s.topic ? ` · ${s.topic}` : ''}{s.ai_feedback?.estimated_level ? ` · AI estimate: ${s.ai_feedback.estimated_level}` : ''}
           </p>
         </div>
-        {!audioUrl && <button onClick={listen} disabled={loadingAudio} style={{ ...smallBtn, flexShrink: 0 }}>{loadingAudio ? 'Loading…' : '▶ Listen'}</button>}
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {!audioUrl && <button onClick={listen} disabled={loadingAudio} style={smallBtn}>{loadingAudio ? 'Loading…' : '▶ Listen'}</button>}
+          {downloadUrl
+            ? <a href={downloadUrl} style={{ ...smallBtn, textDecoration: 'none', display: 'inline-block' }}>⬇ Save file</a>
+            : <button onClick={prepareDownload} disabled={loadingDownload} style={smallBtn}>{loadingDownload ? 'Preparing…' : '⬇ Download'}</button>}
+        </div>
       </div>
 
       {audioUrl && (
