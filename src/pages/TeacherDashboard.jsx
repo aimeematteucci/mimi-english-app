@@ -581,6 +581,8 @@ function AudioReviewItem({ s, onApproved }) {
   const [text, setText] = useState(() => flattenFeedback(s.ai_feedback))
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [audioUrl, setAudioUrl] = useState(null)
+  const [loadingAudio, setLoadingAudio] = useState(false)
 
   async function approve() {
     setSaving(true)
@@ -595,8 +597,10 @@ function AudioReviewItem({ s, onApproved }) {
   }
 
   async function listen() {
-    const { data } = await supabase.storage.from('speaking-audio').createSignedUrl(s.storage_path, 60)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+    setLoadingAudio(true)
+    const { data } = await supabase.storage.from('speaking-audio').createSignedUrl(s.storage_path, 300)
+    setLoadingAudio(false)
+    if (data?.signedUrl) setAudioUrl(data.signedUrl)
   }
 
   return (
@@ -608,8 +612,13 @@ function AudioReviewItem({ s, onApproved }) {
             {new Date(s.created_at).toLocaleDateString()}{s.topic ? ` · ${s.topic}` : ''}{s.ai_feedback?.estimated_level ? ` · AI estimate: ${s.ai_feedback.estimated_level}` : ''}
           </p>
         </div>
-        <button onClick={listen} style={{ ...smallBtn, flexShrink: 0 }}>▶ Listen</button>
+        {!audioUrl && <button onClick={listen} disabled={loadingAudio} style={{ ...smallBtn, flexShrink: 0 }}>{loadingAudio ? 'Loading…' : '▶ Listen'}</button>}
       </div>
+
+      {audioUrl && (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <audio controls autoPlay src={audioUrl} style={{ width: '100%', marginBottom: 10 }} />
+      )}
 
       <button onClick={() => setExpanded(e => !e)} style={{ ...smallBtn, marginBottom: 10 }}>
         {expanded ? 'Hide transcript ▲' : 'Show transcript ▼'}
