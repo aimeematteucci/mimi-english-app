@@ -28,14 +28,16 @@ export default function Notebook() {
   const [files, setFiles] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [vocabCount, setVocabCount] = useState(0)
+  const [ranking, setRanking] = useState([])
 
   const fetchData = useCallback(async () => {
     const sid = profile.id
-    const [{ data: sl }, { data: fb }, { data: sf }, { count }] = await Promise.all([
+    const [{ data: sl }, { data: fb }, { data: sf }, { count }, { data: rk }] = await Promise.all([
       supabase.from('student_lessons').select('*, lessons(*)').eq('student_id', sid),
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
       supabase.from('student_vocabulary').select('id', { count: 'exact', head: true }).eq('student_id', sid),
+      supabase.from('study_ranking').select('*'),
     ])
     setStudentLessons(sl || [])
     const allFb = fb || []
@@ -43,6 +45,7 @@ export default function Notebook() {
     setSuggestions(allFb.filter(f => f.type === 'suggestion'))
     setFiles(sf || [])
     setVocabCount(count || 0)
+    setRanking(rk || [])
   }, [profile])
 
   useEffect(() => {
@@ -181,6 +184,9 @@ export default function Notebook() {
               )}
             </Section>
 
+            {/* Study ranking */}
+            <RankingSection ranking={ranking} profile={profile} />
+
             {/* Speaking practice */}
             <SpeakingSection profile={profile} />
 
@@ -210,6 +216,42 @@ function Section({ tab, color, icon, children }) {
         {children}
       </div>
     </section>
+  )
+}
+
+/* ── Study ranking ── */
+function RankingSection({ ranking, profile }) {
+  const medals = ['🥇', '🥈', '🥉']
+  return (
+    <Section tab="Study ranking" color={PLUM} icon="🏆">
+      {ranking.length === 0 ? (
+        <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No study days logged yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {ranking.map((r, i) => {
+            const isMe = r.student_id === profile?.id
+            return (
+              <div key={r.student_id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: isMe ? 'rgba(165,107,124,0.09)' : LIGHT,
+                border: `1.5px solid ${isMe ? 'rgba(165,107,124,0.3)' : 'rgba(0,0,0,0.06)'}`,
+                borderRadius: 12, padding: '10px 16px',
+              }}>
+                <span style={{ width: 24, fontSize: 15, fontWeight: 700, color: MUTED, textAlign: 'center' }}>
+                  {medals[i] || i + 1}
+                </span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: isMe ? 700 : 500, color: TEXT }}>
+                  {r.full_name}{isMe ? ' (you)' : ''}
+                </span>
+                <span className="nb-mono" style={{ fontSize: 13, color: MUTED }}>
+                  {r.days_studied} day{r.days_studied === 1 ? '' : 's'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Section>
   )
 }
 
