@@ -18,15 +18,20 @@ create policy "Students see own study days" on public.study_days for select usin
 -- Views run with the owner's privileges by default (not the caller's), so
 -- this can aggregate across every student's row even though the students
 -- table policies above only let each student see their own study_days.
+--
+-- Tie-break is account age (student_since, oldest first): until real
+-- study_days history builds up, everyone ties at 0 days, so this keeps the
+-- ranking stable instead of reordering randomly on every load.
 create view public.study_ranking as
 select
   p.id as student_id,
   coalesce(p.full_name, split_part(p.email, '@', 1)) as full_name,
-  count(sd.study_date) as days_studied
+  count(sd.study_date) as days_studied,
+  p.created_at as student_since
 from public.profiles p
 left join public.study_days sd on sd.student_id = p.id
 where p.role = 'student'
-group by p.id, p.full_name, p.email
-order by days_studied desc, full_name asc;
+group by p.id, p.full_name, p.email, p.created_at
+order by days_studied desc, student_since asc;
 
 grant select on public.study_ranking to authenticated;

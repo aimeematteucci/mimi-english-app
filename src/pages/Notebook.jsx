@@ -37,7 +37,10 @@ export default function Notebook() {
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
       supabase.from('student_vocabulary').select('id', { count: 'exact', head: true }).eq('student_id', sid),
-      supabase.from('study_ranking').select('*'),
+      supabase.from('study_ranking').select('*')
+        .order('days_studied', { ascending: false })
+        .order('student_since', { ascending: true })
+        .limit(5),
     ])
     setStudentLessons(sl || [])
     const allFb = fb || []
@@ -117,7 +120,11 @@ export default function Notebook() {
       </div>
 
       {/* ── Page body ── */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 32px' }}>
+      <div className="nb-body" style={{ padding: '0 32px' }}>
+        <aside className="nb-sidebar">
+          <RankingSidebar ranking={ranking} profile={profile} />
+        </aside>
+
         <div style={{ position: 'relative', width: '100%', maxWidth: 900 }}>
 
           {/* spiral binding along the left edge */}
@@ -184,9 +191,6 @@ export default function Notebook() {
               )}
             </Section>
 
-            {/* Study ranking */}
-            <RankingSection ranking={ranking} profile={profile} />
-
             {/* Speaking practice */}
             <SpeakingSection profile={profile} />
 
@@ -219,39 +223,47 @@ function Section({ tab, color, icon, children }) {
   )
 }
 
-/* ── Study ranking ── */
-function RankingSection({ ranking, profile }) {
+/* ── Study ranking (sidebar) ── */
+function RankingSidebar({ ranking, profile }) {
   const medals = ['🥇', '🥈', '🥉']
   return (
-    <Section tab="Study ranking" color={PLUM} icon="🏆">
+    <div className="nb-card" style={{ background: CARD_BG, borderRadius: 16, padding: '18px 16px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+      <p style={{
+        fontFamily: "'Space Mono', monospace", fontSize: 11, fontWeight: 700,
+        letterSpacing: 0.6, textTransform: 'uppercase', color: PLUM,
+        margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        🏆 Top 5
+      </p>
       {ranking.length === 0 ? (
-        <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No study days logged yet.</p>
+        <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>No students yet.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {ranking.map((r, i) => {
             const isMe = r.student_id === profile?.id
             return (
               <div key={r.student_id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
+                display: 'flex', alignItems: 'center', gap: 8,
                 background: isMe ? 'rgba(165,107,124,0.09)' : LIGHT,
                 border: `1.5px solid ${isMe ? 'rgba(165,107,124,0.3)' : 'rgba(0,0,0,0.06)'}`,
-                borderRadius: 12, padding: '10px 16px',
+                borderRadius: 10, padding: '8px 10px',
               }}>
-                <span style={{ width: 24, fontSize: 15, fontWeight: 700, color: MUTED, textAlign: 'center' }}>
+                <span style={{ width: 18, fontSize: 13, fontWeight: 700, color: MUTED, textAlign: 'center', flexShrink: 0 }}>
                   {medals[i] || i + 1}
                 </span>
-                <span style={{ flex: 1, fontSize: 14, fontWeight: isMe ? 700 : 500, color: TEXT }}>
-                  {r.full_name}{isMe ? ' (you)' : ''}
+                <span style={{
+                  flex: 1, fontSize: 13, fontWeight: isMe ? 700 : 500, color: TEXT,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {r.full_name.split(' ')[0]}{isMe ? ' (you)' : ''}
                 </span>
-                <span className="nb-mono" style={{ fontSize: 13, color: MUTED }}>
-                  {r.days_studied} day{r.days_studied === 1 ? '' : 's'}
-                </span>
+                <span className="nb-mono" style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{r.days_studied}d</span>
               </div>
             )
           })}
         </div>
       )}
-    </Section>
+    </div>
   )
 }
 

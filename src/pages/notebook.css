@@ -104,6 +104,24 @@
   .nb-student-grid { grid-template-columns: 1fr; }
 }
 
+/* Two-column body: ranking sidebar + notebook page */
+.nb-body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 24px;
+}
+.nb-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+}
+@media (max-width: 900px) {
+  .nb-body { flex-direction: column; align-items: stretch; }
+  .nb-sidebar { width: 100%; position: static; order: -1; }
+}
+
 .nb-shelf-card {
   flex: 0 0 220px;
   cursor: pointer;
