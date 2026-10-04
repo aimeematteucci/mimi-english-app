@@ -5,6 +5,7 @@ import SignupPage from './pages/SignupPage'
 import Notebook from './pages/Notebook'
 import Vocabulary from './pages/Vocabulary'
 import TeacherDashboard from './pages/TeacherDashboard'
+import PlacementTest from './pages/PlacementTest'
 
 function ProtectedRoute({ children, role }) {
   const { user, profile, loading } = useAuth()
@@ -21,6 +22,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/teste" element={<PlacementTest />} />
       <Route path="/login" element={user ? <Navigate to={profile?.role === 'teacher' ? '/teacher' : '/dashboard'} replace /> : <LoginPage />} />
       <Route path="/signup" element={user ? <Navigate to="/dashboard" replace /> : <SignupPage />} />
       <Route path="/dashboard" element={
