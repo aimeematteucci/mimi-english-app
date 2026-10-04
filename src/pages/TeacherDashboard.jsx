@@ -131,6 +131,7 @@ export default function TeacherDashboard() {
               : (
                 <>
                   <AudioReviewSection items={pendingReviews} onUpdate={() => { fetchPendingReviews(); fetchStudents() }} />
+                  <PlacementLeadsSection />
                   <section>
                     <span className="nb-tab" style={{ background: OLIVE }}><span>🎓</span>Students</span>
                   <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
@@ -559,6 +560,65 @@ function Field({ label, value, onChange, placeholder }) {
 const addBtn = { padding: '9px 18px', borderRadius: 10, border: 'none', background: ACCENT, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 const cancelBtn = { padding: '9px 18px', borderRadius: 10, border: '1.5px solid rgba(0,0,0,0.15)', background: 'transparent', color: MUTED, fontSize: 13, fontWeight: 600, cursor: 'pointer' }
 const smallBtn = { padding: '5px 12px', borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.12)', background: 'transparent', color: MUTED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }
+
+/* ── Leads from the public placement test (/teste) ── */
+function PlacementLeadsSection() {
+  const [leads, setLeads] = useState([])
+  const [showAll, setShowAll] = useState(false)
+
+  const fetchLeads = useCallback(async () => {
+    const { data } = await supabase.from('placement_leads').select('*').order('created_at', { ascending: false })
+    setLeads(data || [])
+  }, [])
+
+  useEffect(() => { fetchLeads() }, [fetchLeads])
+
+  async function remove(id) {
+    if (!confirm('Delete this lead?')) return
+    await supabase.from('placement_leads').delete().eq('id', id)
+    fetchLeads()
+  }
+
+  const visible = showAll ? leads : leads.slice(0, 5)
+  const testUrl = `${window.location.origin}/teste`
+
+  return (
+    <section style={{ marginBottom: 30 }}>
+      <span className="nb-tab" style={{ background: PLUM }}><span>📝</span>Placement test leads{leads.length > 0 ? ` (${leads.length})` : ''}</span>
+      <div className="nb-card" style={{ background: CARD_BG, borderRadius: '0 16px 16px 16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+        <p style={{ fontSize: 13, color: MUTED, margin: '0 0 14px' }}>
+          Public link: <a href={testUrl} target="_blank" rel="noreferrer" className="nb-mono" style={{ color: ACCENT, fontWeight: 700 }}>{testUrl}</a>
+          {' '}· add <span className="nb-mono">?src=instagram</span> to track where leads come from.
+        </p>
+        {leads.length === 0 ? (
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>No one has taken the test yet.</p>
+        ) : (
+          <>
+            {visible.map(l => {
+              const phone = l.whatsapp.replace(/\D/g, '')
+              return (
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderTop: '1px solid rgba(0,0,0,0.06)', flexWrap: 'wrap' }}>
+                  <span style={{ minWidth: 44, textAlign: 'center', padding: '6px 8px', borderRadius: 8, background: OLIVE, color: 'white', fontWeight: 800, fontSize: 14 }}>{l.level}</span>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <p style={{ fontWeight: 700, fontSize: 14, color: TEXT, margin: 0 }}>{l.name}</p>
+                    <p className="nb-mono" style={{ fontSize: 11, color: MUTED, margin: '3px 0 0' }}>
+                      {l.whatsapp}{l.email ? ` · ${l.email}` : ''} · {l.score}/{l.total} · {new Date(l.created_at).toLocaleDateString('pt-BR')}{l.source ? ` · ${l.source}` : ''}
+                    </p>
+                  </div>
+                  <a href={`https://wa.me/${phone.length <= 11 ? '55' + phone : phone}`} target="_blank" rel="noreferrer" style={{ ...smallBtn, textDecoration: 'none' }}>WhatsApp</a>
+                  <button onClick={() => remove(l.id)} style={{ ...smallBtn, color: DANGER }}>Delete</button>
+                </div>
+              )
+            })}
+            {leads.length > 5 && (
+              <button onClick={() => setShowAll(v => !v)} style={{ ...smallBtn, marginTop: 10 }}>{showAll ? 'Show less' : `Show all ${leads.length}`}</button>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
 
 /* ── Speaking practice review queue ── */
 function AudioReviewSection({ items, onUpdate }) {
