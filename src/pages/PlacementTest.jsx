@@ -49,7 +49,8 @@ const LEVELS = [
   { code: 'C2', name: 'Proficiente', pct: 100, text: 'Impressionante! Você acertou praticamente tudo. Vamos trabalhar conversação de alto nível, escrita e pronúncia para manter seu inglês afiado.' },
 ]
 
-const WHATSAPP = import.meta.env.VITE_WHATSAPP_NUMBER
+// Teacher's WhatsApp for the trial-class button. The env var overrides it.
+const WHATSAPP = import.meta.env.VITE_WHATSAPP_NUMBER || '5512988803900'
 
 function computeResult(answers) {
   const correctByBand = Object.fromEntries(BANDS.map(b => [b, 0]))
