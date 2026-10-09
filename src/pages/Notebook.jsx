@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import ClassesSection from './booking/ClassesSection'
 import './notebook.css'
 
 const ACCENT = '#c17c4a'
@@ -134,6 +135,9 @@ export default function Notebook() {
 
           <main className="nb-page" style={{ padding: '40px 8px 60px 36px' }}>
             <div className="nb-margin-line" />
+
+            {/* Classes: credits + booking */}
+            <ClassesSection profile={profile} />
 
             {/* Extra activities */}
             <Section tab="Extra activities" color={OLIVE} icon="📌">

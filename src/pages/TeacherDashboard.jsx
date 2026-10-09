@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { UpcomingClassesSection, AvailabilitySection, StudentCreditsSection } from './booking/TeacherBooking'
 import './notebook.css'
 
 const ACCENT = '#c17c4a'
@@ -131,6 +132,7 @@ export default function TeacherDashboard() {
               : (
                 <>
                   <AudioReviewSection items={pendingReviews} onUpdate={() => { fetchPendingReviews(); fetchStudents() }} />
+                  <UpcomingClassesSection />
                   <PlacementLeadsSection />
                   <section>
                     <span className="nb-tab" style={{ background: OLIVE }}><span>🎓</span>Students</span>
@@ -158,6 +160,7 @@ export default function TeacherDashboard() {
                     )}
                   </div>
                   </section>
+                  <div style={{ marginTop: 30 }}><AvailabilitySection /></div>
                 </>
               )}
           </main>
@@ -268,6 +271,9 @@ function StudentEditor({ student, onBack }) {
           </div>
         </div>
       </section>
+
+      {/* Credits & classes */}
+      <StudentCreditsSection student={student} />
 
       {/* Extra activities */}
       <section style={{ marginBottom: 30 }}>
