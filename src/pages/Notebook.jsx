@@ -29,7 +29,7 @@ export default function Notebook() {
   const [files, setFiles] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [vocabCount, setVocabCount] = useState(0)
-  const [ranking, setRanking] = useState([])
+  const [rank, setRank] = useState(null)
 
   const fetchData = useCallback(async () => {
     const sid = profile.id
@@ -38,10 +38,7 @@ export default function Notebook() {
       supabase.from('feedback').select('*').eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('student_files').select('*').eq('student_id', sid).order('uploaded_at', { ascending: false }),
       supabase.from('student_vocabulary').select('id', { count: 'exact', head: true }).eq('student_id', sid),
-      supabase.from('study_ranking').select('*')
-        .order('days_studied', { ascending: false })
-        .order('student_since', { ascending: true })
-        .limit(5),
+      supabase.rpc('my_study_rank').maybeSingle(),
     ])
     setStudentLessons(sl || [])
     const allFb = fb || []
@@ -49,7 +46,7 @@ export default function Notebook() {
     setSuggestions(allFb.filter(f => f.type === 'suggestion'))
     setFiles(sf || [])
     setVocabCount(count || 0)
-    setRanking(rk || [])
+    setRank(rk || null)
   }, [profile])
 
   useEffect(() => {
@@ -123,7 +120,7 @@ export default function Notebook() {
       {/* ── Page body ── */}
       <div className="nb-body" style={{ padding: '0 32px' }}>
         <aside className="nb-sidebar">
-          <RankingSidebar ranking={ranking} profile={profile} />
+          <RankingSidebar rank={rank} />
         </aside>
 
         <div style={{ position: 'relative', width: '100%', maxWidth: 900 }}>
@@ -227,48 +224,38 @@ function Section({ tab, color, icon, children }) {
   )
 }
 
-/* ── Study ranking (sidebar) ── */
-function RankingSidebar({ ranking, profile }) {
-  const medals = ['🥇', '🥈', '🥉']
+/* ── Study ranking (sidebar) ──
+   Only the student's own position this month — never who is ahead of them. */
+function RankingSidebar({ rank }) {
   return (
-    <div className="nb-card" style={{ background: CARD_BG, borderRadius: 16, padding: '18px 16px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+    <div className="nb-card" style={{ background: CARD_BG, borderRadius: 16, padding: '18px 16px', boxShadow: '0 4px 16px rgba(0,0,0,0.07)', textAlign: 'center' }}>
       <p style={{
         fontFamily: "'Space Mono', monospace", fontSize: 11, fontWeight: 700,
         letterSpacing: 0.6, textTransform: 'uppercase', color: PLUM,
-        margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 6,
+        margin: '0 0 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
       }}>
-        🏆 Top 5
+        🏆 Your ranking
       </p>
-      {ranking.length === 0 ? (
-        <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>No students yet.</p>
+      {!rank ? (
+        <p style={{ fontSize: 13, color: MUTED, margin: 0 }}>…</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {ranking.map((r, i) => {
-            const isMe = r.student_id === profile?.id
-            return (
-              <div key={r.student_id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: isMe ? 'rgba(165,107,124,0.09)' : LIGHT,
-                border: `1.5px solid ${isMe ? 'rgba(165,107,124,0.3)' : 'rgba(0,0,0,0.06)'}`,
-                borderRadius: 10, padding: '8px 10px',
-              }}>
-                <span style={{ width: 18, fontSize: 13, fontWeight: 700, color: MUTED, textAlign: 'center', flexShrink: 0 }}>
-                  {medals[i] || i + 1}
-                </span>
-                <span style={{
-                  flex: 1, fontSize: 13, fontWeight: isMe ? 700 : 500, color: TEXT,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {r.full_name.split(' ')[0]}{isMe ? ' (you)' : ''}
-                </span>
-                <span className="nb-mono" style={{ fontSize: 11, color: MUTED, flexShrink: 0 }}>{r.days_studied}d</span>
-              </div>
-            )
-          })}
-        </div>
+        <>
+          <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 44, fontWeight: 800, color: PLUM, margin: 0, lineHeight: 1 }}>
+            {ordinal(rank.study_position)}
+          </p>
+          <p style={{ fontSize: 13, color: TEXT, margin: '8px 0 0', lineHeight: 1.4 }}>
+            out of <strong>{rank.total_students}</strong> student{rank.total_students === 1 ? '' : 's'}
+          </p>
+          <p className="nb-mono" style={{ fontSize: 10.5, color: MUTED, margin: '6px 0 0' }}>this month</p>
+        </>
       )}
     </div>
   )
+}
+
+function ordinal(n) {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')
+  return `${n}${suffix}`
 }
 
 /* ── Feedback ── */

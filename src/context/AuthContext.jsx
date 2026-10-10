@@ -31,15 +31,6 @@ export function AuthProvider({ children }) {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
     setProfile(data)
     setLoading(false)
-    if (data?.role === 'student') checkInToday(userId)
-  }
-
-  function checkInToday(userId) {
-    const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
-    supabase.from('study_days').upsert(
-      { student_id: userId, study_date: today },
-      { onConflict: 'student_id,study_date', ignoreDuplicates: true }
-    )
   }
 
   async function signIn(email, password) {
