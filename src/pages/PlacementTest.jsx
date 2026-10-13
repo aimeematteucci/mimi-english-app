@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Logo from '../components/Logo'
+import { ebTheme } from '../theme/englishbox'
 
 // Five questions per CEFR band, easiest first. A band counts as "passed"
 // with 3+ correct; the result is the last band passed before the first one
@@ -246,11 +247,11 @@ function Result({ result, onRestart }) {
 const styles = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'var(--bg)', padding: 16,
+    ...ebTheme, background: 'var(--bg)', padding: 16,
   },
   card: {
     background: 'var(--card-cream)', borderRadius: 28, padding: '28px 24px 32px',
-    width: '100%', maxWidth: 480, boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
+    width: '100%', maxWidth: 480, boxShadow: '0 2px 0 rgba(48,67,54,0.12), 0 18px 40px -16px rgba(20,30,22,0.5)',
   },
   brand: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', marginBottom: 20 },
   brandName: { fontWeight: 700, fontSize: 15, color: 'var(--text-muted)', letterSpacing: 0.5 },
@@ -262,29 +263,29 @@ const styles = {
   hint: { fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 14, lineHeight: 1.5 },
   barOuter: {
     position: 'relative', height: 40, borderRadius: 999, border: '2.5px solid',
-    padding: 3, background: 'white', transition: 'opacity 0.2s',
+    padding: 3, background: '#fbfdfa', transition: 'opacity 0.2s',
   },
   barFill: { height: '100%', borderRadius: 999 },
   barLabel: { position: 'absolute', top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 14 },
   barPct: { position: 'absolute', right: 16, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 600, color: 'var(--text-dark)' },
   primaryBtn: {
     width: '100%', padding: '15px', borderRadius: 12, border: 'none',
-    background: 'var(--text-dark)', color: 'var(--card-green)', fontSize: 16,
+    background: '#466550', color: '#fbfdfa', fontSize: 16,
     fontWeight: 800, letterSpacing: 1,
   },
   progressRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   counter: { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' },
   linkBtn: { background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', padding: 0 },
-  progressTrack: { height: 8, borderRadius: 999, background: 'rgba(67,73,42,0.12)', overflow: 'hidden', marginBottom: 28 },
+  progressTrack: { height: 8, borderRadius: 999, background: 'rgba(48,67,54,0.12)', overflow: 'hidden', marginBottom: 28 },
   progressFill: { height: '100%', background: 'var(--card-olive)', transition: 'width 0.25s' },
   instruction: { fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 },
   question: { fontSize: 22, fontWeight: 700, color: 'var(--text-dark)', lineHeight: 1.35, marginBottom: 22 },
   option: {
     width: '100%', textAlign: 'left', padding: '14px 18px', borderRadius: 14,
-    border: '2px solid var(--text-dark)', background: 'white', fontSize: 16,
+    border: '2px solid var(--text-dark)', background: '#fbfdfa', fontSize: 16,
     fontWeight: 600, color: 'var(--text-dark)',
   },
-  dontKnow: { borderStyle: 'dashed', borderColor: 'rgba(67,73,42,0.35)', color: 'var(--text-muted)', fontWeight: 500 },
+  dontKnow: { borderStyle: 'dashed', borderColor: 'rgba(48,67,54,0.35)', color: 'var(--text-muted)', fontWeight: 500 },
   field: { marginBottom: 16 },
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 },
   input: { width: '100%', padding: '12px 14px', fontSize: 15 },

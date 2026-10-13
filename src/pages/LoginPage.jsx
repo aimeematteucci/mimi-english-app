@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
+import { ebTheme } from '../theme/englishbox'
 
 export default function LoginPage() {
   const { signIn } = useAuth()
@@ -58,12 +59,7 @@ export default function LoginPage() {
 
 const styles = {
   page: {
-    // EnglishBox design system colors, scoped to the login page only
-    '--bg': '#5b7b65',          // sage-500
-    '--card-cream': '#f4efe4',  // paper-100
-    '--card-green': '#bcc8b4',  // sage-100 (logo circle)
-    '--text-dark': '#304336',   // forest-900
-    '--text-muted': '#466550',  // forest-600
+    ...ebTheme,
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
     background: 'var(--bg)', padding: 16,
   },

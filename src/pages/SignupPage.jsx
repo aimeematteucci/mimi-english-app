@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
+import { ebTheme } from '../theme/englishbox'
 
 export default function SignupPage() {
   const { signUp } = useAuth()
@@ -82,11 +83,11 @@ export default function SignupPage() {
 const styles = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'var(--bg)', padding: 16,
+    ...ebTheme, background: 'var(--bg)', padding: 16,
   },
   card: {
     background: 'var(--card-cream)', borderRadius: 28, padding: '40px 36px',
-    width: '100%', maxWidth: 420, boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
+    width: '100%', maxWidth: 420, boxShadow: '0 2px 0 rgba(48,67,54,0.12), 0 18px 40px -16px rgba(20,30,22,0.5)',
   },
   header: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 },
   title: { fontSize: 22, fontWeight: 700, color: 'var(--text-dark)', margin: 0 },
@@ -95,13 +96,13 @@ const styles = {
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 },
   input: {
     width: '100%', padding: '11px 14px', borderRadius: 10,
-    border: '1.5px solid rgba(67,73,42,0.2)', background: 'white',
+    border: '1.5px solid rgba(48,67,54,0.2)', background: '#fbfdfa',
     fontSize: 14, color: 'var(--text-dark)', outline: 'none',
   },
   error: { color: 'var(--danger)', fontSize: 13, marginBottom: 12 },
   btn: {
     width: '100%', padding: '12px', borderRadius: 12, border: 'none',
-    background: 'var(--text-dark)', color: 'var(--card-green)', fontSize: 15,
+    background: '#466550', color: '#fbfdfa', fontSize: 15,
     fontWeight: 600, marginTop: 8, cursor: 'pointer',
   },
   footer: { textAlign: 'center', marginTop: 24, fontSize: 14, color: 'var(--text-muted)' },
