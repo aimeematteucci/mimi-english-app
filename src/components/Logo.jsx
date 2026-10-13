@@ -11,13 +11,13 @@ export default function Logo({ size = 56 }) {
       flexShrink: 0,
     }}>
       <span style={{
-        fontFamily: 'Georgia, serif',
-        fontStyle: 'italic',
-        fontSize: size * 0.6,
+        fontFamily: "'Times New Roman', Times, serif",
+        fontSize: size * 0.44,
+        letterSpacing: '-0.04em',
         color: 'var(--text-dark)',
         lineHeight: 1,
-        marginTop: 2,
-      }}>M</span>
+        marginTop: 1,
+      }}>EB</span>
     </div>
   )
 }
